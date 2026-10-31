@@ -109,7 +109,9 @@ def tool_snapshot(ctx, domain, result):
         items = data.get('items') if tool == 'list_cards' else [dict(data, id=ctx.entities.get('card_id'))]
         if not isinstance(items, list):
             return _snapshot(ctx, domain, {}, source, 'unknown')
-        values = {'cards': [{'id': item.get('id'), 'name': item.get('name'), 'status': item.get('status', 'unknown')}
+        values = {'cards': [{'id': item.get('id'), 'name': item.get('name'), 'status': item.get('status', 'unknown'),
+                            'last4': item.get('last4') if isinstance(item.get('last4'), str) and
+                            len(item['last4']) == 4 and item['last4'].isascii() and item['last4'].isdigit() else None}
                             for item in items]}
     elif domain == 'family':
         members = data.get('members')

@@ -189,7 +189,7 @@ function renderDomainGuidance(guidance, panel) {
     const row=document.createElement('div');row.className='domain-choice';
     const label=document.createElement('strong');label.textContent=choice.label;
     const detail=document.createElement('span');detail.textContent=choice.detail;row.append(label,detail);
-    if(choice.request){const button=document.createElement('button');button.type='button';button.textContent='选择并核对新计划';button.disabled=busy;
+    if(choice.request){const button=document.createElement('button');button.type='button';button.textContent=guidance.domain==='subscription'?'申请停止扣费':choice.request.startsWith('解挂')?'申请解挂':'申请挂失';button.disabled=busy;
       button.addEventListener('click',()=>send(choice.request,{displayText:(guidance.domain==='subscription'?'申请停止自动扣费：':choice.request.startsWith('解挂')?'申请解挂：':'申请挂失：')+choice.label}));row.append(button);}
     section.append(row);
   }

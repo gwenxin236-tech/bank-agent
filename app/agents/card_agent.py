@@ -23,13 +23,17 @@ class CardAgent(SnapshotAgent):
                  '后续付款仍需重新进行支付预检，核对卡状态、余额、限额和预算；解挂不保证付款一定成功。']
         if operation not in ('report_loss', 'unreport_loss'):
             missing.append('card_operation')
-            notes.append('请说明是挂失还是解挂；其他卡片业务请联系人工核实。')
+            if operation:
+                notes.append('本渠道不支持该卡片操作，请联系人工核实。')
+            else:
+                notes = ['本次仅查询卡片状态，未办理挂失或解挂。']
         if self.snapshot.status == 'unknown':
             notes.append('本次未能核实卡片资料，请先核实或联系人工，不能据此认定没有银行卡。')
         elif not cards:
             notes.append('本次查询范围内未发现卡片，请核对账户范围后再办理。')
         elif target is None:
-            notes.append('请先核实要办理的具体卡片，不能默认选择第一张卡。')
+            if operation:
+                notes.append('请先核实要办理的具体卡片，不能默认选择第一张卡。')
             if sum(c.get('id') == ctx.entities.get('card_id') for c in cards) > 1:
                 signals.append('card_identity_ambiguous')
                 notes.append('卡片标识重复，需核对资料后再办理。')
