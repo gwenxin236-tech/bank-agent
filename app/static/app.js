@@ -137,7 +137,7 @@ function closeSettings() { $('#settingsDialog').close(); $('#settingsBtn').focus
 window.__a11yAnnounce = announceA11y;
 function friendlyRisk(level, protective=false) { return protective ? '已拦截保护' : ({green:'可以直接办理',yellow:'请你确认后办理',red:'需要再次验证'}[level] || '请你确认后办理'); }
 function friendlyReason(level) { return ({green:'这是查询，不会改变账户里的钱。',yellow:'这是会改变账户状态的操作，先请你核对清楚。',red:'这是更重要的操作，除了核对，还需要再验证一次。'}[level] || '请你核对清楚后再继续。'); }
-function setBusy(value) { busy=value; $('#sendBtn').disabled=value; $('#voiceBtn').disabled=value; $('#messageInput').disabled=value; document.querySelectorAll('#confirmBtn,#cancelBtn').forEach(button=>button.disabled=value); $('#typing').classList.toggle('hidden', !value); $('#assistantStatus').textContent=value?'正在处理':'在线'; }
+function setBusy(value) { busy=value; $('#sendBtn').disabled=value; $('#voiceBtn').disabled=value; $('#messageInput').disabled=value; document.querySelectorAll('#confirmBtn,#cancelBtn,.domain-choice button').forEach(button=>button.disabled=value); $('#typing').classList.toggle('hidden', !value); $('#assistantStatus').textContent=value?'正在处理':'在线'; }
 function showToast(text) { const el=$('#toast'); el.textContent=text; el.classList.remove('hidden'); clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.classList.add('hidden'),3200); }
 function money(cents) { if (!Number.isInteger(cents)) return '—'; return `¥${(cents/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}`; }
 function renderReceipt(receipt) {
@@ -165,7 +165,28 @@ function renderPlan(planView, resultView=null) {
   announceA11y(`${phaseLabel}。${planView.plain_summary || planView.summary || ''}`);
   $('#transferDetailsBtn')?.addEventListener('click',()=>openTransferDialog(transferDraft));
   $('#confirmBtn')?.addEventListener('click',confirmPlan); $('#cancelBtn')?.addEventListener('click',cancelPlan);
+  renderDomainGuidance(planView.domain_guidance, panel);
   renderDynamicTask(planView,resultView);
+}
+
+function renderDomainGuidance(guidance, panel) {
+  if (!guidance) return;
+  const section=document.createElement('section');section.className='domain-guidance';section.id='domainGuidance';
+  section.setAttribute('aria-label',guidance.title || '办理核验');
+  const title=document.createElement('h3');title.textContent=guidance.title;section.append(title);
+  const phase=document.createElement('p');phase.className='domain-phase';phase.textContent=guidance.phase;section.append(phase);
+  const list=document.createElement('ul');
+  for(const note of guidance.notes||[]){const li=document.createElement('li');li.textContent=note;list.append(li);}section.append(list);
+  for(const choice of guidance.choices||[]){
+    const row=document.createElement('div');row.className='domain-choice';
+    const label=document.createElement('strong');label.textContent=choice.label;
+    const detail=document.createElement('span');detail.textContent=choice.detail;row.append(label,detail);
+    if(choice.request){const button=document.createElement('button');button.type='button';button.textContent='选择并核对新计划';button.disabled=busy;
+      button.addEventListener('click',()=>send(choice.request,{displayText:(guidance.domain==='subscription'?'申请停止自动扣费：':choice.request.startsWith('解挂')?'申请解挂：':'申请挂失：')+choice.label}));row.append(button);}
+    section.append(row);
+  }
+  if((guidance.choices||[]).length){const foot=document.createElement('p');foot.className='domain-phase';foot.textContent='选择只会创建新计划，仍需确认；卡片操作还需身份验证。';section.append(foot);}
+  panel.append(section);
 }
 
 function drawDynamicGraph(container,nodes){
@@ -441,9 +462,9 @@ $('#transferForm').addEventListener('submit',event=>{
   send(`给${recipient}转${amount}元${note ? '，备注' + note : ''}`);
 });
 
-async function send(msg, {openTransferForm = false} = {}) {
+async function send(msg, {openTransferForm = false, displayText = msg} = {}) {
   if (!msg || busy) return;
-  addMessage(msg,'user'); $('#messageInput').value=''; setBusy(true);
+  addMessage(displayText,'user'); $('#messageInput').value=''; setBusy(true);
   try {
     const ocrToken=ocrReviewToken;ocrReviewToken=null;
     const voiceToken=voiceSourceToken;voiceSourceToken=null;

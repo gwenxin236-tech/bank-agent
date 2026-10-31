@@ -436,6 +436,7 @@ class AgentPlan:
             "details": details,
             "preflight": self.preflight,
             "steps": public_steps,
+            "domain_guidance": self.coordination.get('domain_guidance'),
             "confirmation_hint": "请核对收款人、金额和备注，确认无误后再执行。" if self.intent == "transfer" else "请确认以上操作后再继续。",
             "created_at": self.created_at,
             # 这是绑定当前 plan_id 的一次性操作凭据，前端只作为不可读 opaque token 传回。
@@ -452,6 +453,10 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
     if result.get("status") == "DEFERRED":
         return {"ok": False, "status": "DEFERRED", "title": "交易已暂缓", "user_message": result.get("error") or "交易已暂缓，未发生扣款，请联系人工核实。", "trace_id": plan.trace_id}
     receipt = result.get("receipt")
+    if (getattr(plan, 'intent', '') in {'subscription_cancel', 'card_manage'} and result.get('status') == 'FAILED' and result.get('error')):
+        return {'ok':False, 'status':'FAILED', 'title':'请先核实办理条件',
+                'user_message':result['error'],
+                'trace_id':plan.trace_id, 'receipt':receipt}
     if isinstance(receipt, dict) and receipt.get("status") in {"UNKNOWN", "PARTIAL", "FAILED", "PROCESSING"}:
         if getattr(plan, "intent", "") == "subscription_cancel" and receipt.get("status") == "UNKNOWN":
             data = next((item.get("data", {}) for item in result.get("results", [])
@@ -1613,6 +1618,11 @@ class MockBankCore:
             sub = next((item for item in self.subscriptions if item["id"] == sub_id), None)
             if sub is None:
                 return ToolResult(False, "cancel_subscription", error_code="SUBSCRIPTION_NOT_FOUND", error_message="未找到该订阅。")
+            authorization = sub.get('authorization_layer', {})
+            if (sum(item.get('id') == sub_id for item in self.subscriptions) != 1 or
+                    authorization.get('terminable') is not True or authorization.get('debit_permission') != 'active'):
+                return ToolResult(False, 'cancel_subscription', error_code='SUBSCRIPTION_REVIEW_REQUIRED',
+                                  error_message='当前订阅不满足取消条件，请先核实扣费状态和办理渠道；本次未取消。')
             # Transport uncertainty is not evidence of success or failure. The
             # durable subscription remains unchanged and no automatic retry occurs.
             if self.fault_injection in {"transport_timeout", "network_unreachable"}:
@@ -2046,10 +2056,18 @@ class IntentParser:
             return 'unknown', {'clarification': 'card_display_only'}
         if '密码' in t and any(word in t for word in ('修改', '重置', '更改')):
             return 'password_change', {}
+        if re.search(r'(?:不要|不用|不想|不需要|先别|别|暂不).{0,4}(?:挂失|解挂)', t):
+            return 'card_manage', {}
+        card_match = re.fullmatch(r'(挂失|解挂)卡片编号(card_[A-Za-z0-9_-]+)', t)
+        if card_match:
+            return 'card_manage', {'card_operation':'report_loss' if card_match[1]=='挂失' else 'unreport_loss', 'card_id':card_match[2]}
+        subscription_match = re.fullmatch(r'取消订阅编号(sub_[A-Za-z0-9_-]+)', t)
+        if subscription_match:
+            return 'subscription_cancel', {'suggested_subscription_id':subscription_match[1]}
         if '解挂' in t:
-            return 'card_manage', {'card_operation': 'unreport_loss', 'card_id': 'card_001'}
+            return 'card_manage', {'card_operation': 'unreport_loss'}
         if any(word in t for word in ('挂失', '卡丢了', '卡丢失', '卡不见了')):
-            return 'card_manage', {'card_operation': 'report_loss', 'card_id': 'card_001'}
+            return 'card_manage', {'card_operation': 'report_loss'}
         if '卡片管理' in t or '卡片状态' in t or '银行卡' in t:
             return 'card_manage', {}
         # 安全前置：转账相关文本先由本地规则解析，LLM 不能覆盖金额、收款人和反诈判定。
@@ -2244,6 +2262,14 @@ class Planner:
         intent, entities = (FEATURE_INTENT, feature_request) if feature_request is not None else self.parser.parse(text)
         entities = dict(entities)
         entities.pop('_family', None)  # model output can never grant family authority
+        if intent == 'card_manage' and entities.get('card_operation'):
+            selected = entities.get('card_id')
+            # Only an unqualified request with exactly one trusted card can use that card.
+            if not selected and len(self.bank.cards) == 1 and not re.search(r'第|尾号|卡号|编号|另一|那张|这张', text):
+                selected = self.bank.cards[0].get('id')
+            matches = [c for c in self.bank.cards if c.get('id') == selected] if selected else []
+            entities['card_id'] = selected if len(matches) == 1 else None
+            entities['card_name'] = matches[0].get('name', '所选银行卡') if len(matches) == 1 else None
         if intent == "subscription_cancel":
             candidate = entities.get("suggested_subscription_id") or entities.get("subscription_id")
             sub = next((x for x in self.bank.subscriptions if x['id'] == candidate), None)
@@ -2284,11 +2310,13 @@ class Planner:
             operation = entities.get("card_operation")
             if actor_id in self.bank.guardianships.accounts:
                 summary, steps = "本人强认证后转官方人工办理；演示系统不代办家庭成员的卡片写操作", [PlanStep("s1", "本人认证后人工办理", "human_handoff")]
+            elif not operation or not entities.get('card_id'):
+                summary, steps = '核对卡片状态；选择具体卡片后再创建办理计划', [PlanStep('s1','读取卡片状态','list_cards')]
             elif operation == "report_loss":
-                summary = "挂失银联白金卡；先强验证，再核验挂失后的卡片状态"
+                summary = f"挂失{entities['card_name']}；先强验证，再核验挂失后的卡片状态"
                 steps = [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "挂失卡片", "report_card_loss"), PlanStep("s3", "核验挂失后的卡片状态", "verify_card_status")]
             elif operation == "unreport_loss":
-                summary = "解除银联白金卡挂失；先强验证，再核验恢复后的卡片状态"
+                summary = f"解除{entities['card_name']}挂失；先强验证，再核验恢复后的卡片状态"
                 steps = [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "解除卡片挂失", "unreport_card_loss"), PlanStep("s3", "核验解挂后的卡片状态", "verify_card_status")]
             else:
                 summary, steps = "进入卡片管理流程，需要进一步选择操作", [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "人工确认具体卡片操作", "human_handoff")]
@@ -2539,6 +2567,31 @@ class AgentRuntime(RecoveryMixin):
         try:
             review = self.supervisor.observe(ctx, domain, snapshot_factory())
             finding, proposal = (message.payload for message in review.messages)
+            if domain in {'subscription', 'card'}:
+                choices = []
+                values = next((f['value'] for f in finding.facts if f.get('name') == ('subscriptions' if domain == 'subscription' else 'cards')), ())
+                for item in values:
+                    item_id = item.get('id')
+                    if not isinstance(item_id, str) or not re.fullmatch(r'(?:sub|card)_[A-Za-z0-9_-]+', item_id):
+                        continue
+                    if sum(other.get('id') == item_id for other in values) != 1:
+                        continue
+                    if domain == 'subscription':
+                        choices.append({'label':item.get('merchant') or '待核验订阅',
+                            'detail': '可申请停止扣费' if item.get('terminable') and item.get('debit_state') == 'active' else '需核实扣费状态或办理渠道',
+                            'request':'取消订阅编号' + item_id if item.get('terminable') and item.get('debit_state') == 'active' else ''})
+                    else:
+                        status = item.get('status')
+                        operation = '挂失' if status in ('normal','active','正常') else '解挂' if status in ('reported_loss','挂失') else ''
+                        choices.append({'label':item.get('name') or '银行卡', 'detail': '已挂失' if operation == '解挂' else '正常' if operation else '状态待核实',
+                                        'request':operation + '卡片编号' + item_id if operation else ''})
+                plan.coordination['domain_guidance'] = {
+                    'domain':domain, 'title':'订阅办理核验' if domain == 'subscription' else '卡片办理核验',
+                    'notes':list(finding.recommendations), 'choices':choices,
+                    'phase':'本次查询时的资料；办理结果以回执为准',
+                }
+                plan.coordination['domain_review'] = {'domain':domain, 'ready':review.status == 'ready',
+                                                     'tools':[s['tool'] for s in proposal.suggested_steps]}
             envelope = review.messages[0]
             self.audit.write(plan.trace_id, 'domain.' + domain + '.analyzed', {
                 'mode':'ADVISORY_ONLY', 'domain':domain, 'fact_count':len(finding.facts),
@@ -2550,6 +2603,10 @@ class AgentRuntime(RecoveryMixin):
                 {'domain':domain,'phase':'existing_evidence','status':review.status,
                  'conflict_keys':[c['key'] for c in review.conflicts]}, actor=plan.actor_id, intent=plan.intent)
         except Exception:
+            if domain in {'subscription', 'card'}:
+                plan.coordination['domain_review'] = {'domain':domain, 'ready':False, 'tools':[]}
+                plan.coordination['domain_guidance'] = {'domain':domain,'title':'办理资料需核实',
+                    'notes':['领域核验暂不可用，后续写操作已停止；已取得的工具回执仍保留。'], 'choices':[], 'phase':'请核实后重新办理'}
             self.audit.write(plan.trace_id, 'domain.' + domain + '.unavailable',
                 {'mode':'ADVISORY_ONLY', 'reason':'domain_analysis_unavailable', 'bank_result_unchanged':True}, actor=plan.actor_id)
 
@@ -2884,6 +2941,13 @@ class AgentRuntime(RecoveryMixin):
         if result is not None:
             payload["result"] = result
             payload["result_view"] = present_result(plan, result)
+            guidance = payload['plan_view'].get('domain_guidance')
+            if guidance and plan.intent == 'subscription_cancel':
+                guidance = copy.deepcopy(guidance)
+                guidance['phase'] = '办理前查询的资料；是否停止扣费以本次回执为准'
+                guidance['choices'] = []
+                guidance['notes'] = [note for note in guidance['notes'] if not note.startswith('可以提出')]
+                payload['plan_view']['domain_guidance'] = guidance
         payload.update(extra)
         # A review card is not necessarily a pending executable plan. Never advertise
         # confirmation for clarification, rejection or a completed/deferred result.
@@ -4042,6 +4106,12 @@ class AgentRuntime(RecoveryMixin):
         if live.get('authz_allowed') is False:
             denied = self.family.deny(live['decision_reason'], plan)
             return ToolResult(False, step.tool, error_code='AUTHZ_DENIED', error_message=denied['message'])
+        if (step.tool in {'report_card_loss', 'unreport_card_loss'} or
+                (step.tool == 'cancel_subscription' and e.get('subscription_id'))):
+            review = plan.coordination.get('domain_review', {})
+            if not review.get('ready') or step.tool not in review.get('tools', ()):
+                return ToolResult(False, step.tool, error_code='DOMAIN_REVIEW_REQUIRED',
+                                  error_message='本次资料尚不满足办理条件，或无需重复操作。请核实下方说明；本次未执行该操作。')
         if step.tool == 'knowledge_lookup':
             scope=KnowledgeScope(live['knowledge_actor'],live['knowledge_subject'],live['knowledge_delegated'])
             def access_check():
