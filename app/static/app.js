@@ -30,6 +30,7 @@ let voiceSourceToken = null;
 function readPreference(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
 function savePreference(key, value) { try { localStorage.setItem(key, value); } catch (_) {} }
 let elderMode = readPreference('elderMode') !== 'false';
+let focusMode = readPreference('focusMode') === null ? elderMode : readPreference('focusMode') !== 'false';
 let voicePrivacy = readPreference('voicePrivacy') !== 'false';
 let currentDisplay = null;
 let supportBusy = false;
@@ -46,6 +47,65 @@ try {
   hiddenCards = new Set(saved);
 } catch (_) { cardPreferenceNotice = '本地显示偏好损坏，已按全部显示处理。'; }
 const log = $('#chatLog');
+
+// Move the live controls into a native modal: no cloned plans or duplicate actions.
+const focusDialog = $('#focusDialog');
+let focusOrigin = null, focusNodes = [], focusBackdropDown = false;
+function applyFocusMode() {
+  $('#focusToggle').textContent = focusMode ? '大字聚焦：开' : '大字聚焦：关';
+  $('#focusToggle').setAttribute('aria-pressed', String(focusMode));
+  $('#settingsFocusToggle').checked = focusMode;
+  $('#focusEntryHint').textContent = focusMode ? '点一个功能，单独放大看；点周边空白返回' : '也可以在下面用自己的话说';
+}
+function openFocus(button) {
+  if (!focusMode || focusDialog.open || busy) return;
+  focusOrigin = button;
+  $('#focusTitle').textContent = button.querySelector('b').textContent.trim();
+  for (const row of log.children) row.classList.add('focus-history');
+  currentPlan = null; currentResultView = null; currentDisplay = null;
+  renderFraudWarning();
+  $('#planPanel').innerHTML = '<div class="empty-state"><h3>正在读取，请稍候…</h3></div>';
+  const move = (selector, target) => {
+    const node = $(selector), placeholder = document.createComment('focus-home');
+    node.before(placeholder); target.append(node); focusNodes.push({node, placeholder});
+  };
+  for (const selector of ['#elderFraudAlert', '#assistant', '#handoffCardPanel']) move(selector, $('#focusContent'));
+  for (const selector of ['#customerServiceBtn', '#customerServiceStatus', '#newSupportRequestBtn', '#newSupportHint']) move(selector, $('#focusHelp'));
+  for (const selector of ['#authModal', '#auditDrawer', '#toast', '#a11yStatus']) move(selector, focusDialog);
+  document.body.classList.add('focus-open');
+  focusDialog.showModal(); focusDialog.scrollTop = 0; $('#focusClose').focus();
+}
+function closeFocus() {
+  if (focusDialog.open) focusDialog.close();
+  if (!focusNodes.length) return;
+  speechPlayer.stop();
+  for (const {node, placeholder} of focusNodes) placeholder.replaceWith(node);
+  focusNodes = [];
+  for (const row of log.children) row.classList.remove('focus-history');
+  document.body.classList.remove('focus-open');
+  focusOrigin?.focus({preventScroll:true}); focusOrigin = null;
+}
+$('#focusClose').addEventListener('click', closeFocus);
+focusDialog.addEventListener('close', closeFocus);
+focusDialog.addEventListener('cancel', event => {
+  event.preventDefault();
+  if (!$('#authModal').classList.contains('hidden')) { $('#authModal').classList.add('hidden'); $('#confirmBtn')?.focus(); }
+  else if (!$('#auditDrawer').classList.contains('hidden')) { $('#auditDrawer').classList.add('hidden'); $('#focusClose').focus(); }
+  else closeFocus();
+});
+function outsideFocus(event) {
+  const r = focusDialog.getBoundingClientRect();
+  return event.target === focusDialog && (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom);
+}
+focusDialog.addEventListener('pointerdown', event => { focusBackdropDown = outsideFocus(event); });
+focusDialog.addEventListener('pointercancel', () => { focusBackdropDown = false; });
+focusDialog.addEventListener('click', event => {
+  if (focusBackdropDown && outsideFocus(event)) closeFocus();
+  focusBackdropDown = false;
+});
+$('#focusToggle').addEventListener('click', () => { focusMode = !focusMode; savePreference('focusMode', String(focusMode)); applyFocusMode(); });
+$('#settingsFocusToggle').addEventListener('change', event => { focusMode = event.target.checked; savePreference('focusMode', String(focusMode)); applyFocusMode(); });
+applyFocusMode();
 
 function applyElderMode() {
   document.body.classList.toggle('elder-mode', elderMode);
@@ -186,7 +246,10 @@ function renderPlan(planView, resultView=null) {
     : resultView ? ({SUCCESS:'已完成', PROCESSING:'银行确认中', UNKNOWN:'结果核验中', PARTIAL:'部分完成', FAILED:'未完成'}[resultView.status] || '请查看办理结果')
     : !planView.requires_confirmation ? '暂未办理' : friendlyRisk(planView.risk_level);
   const risk = riskMeta(planView.risk_level, phaseLabel);
-  panel.innerHTML=`<div class="plan-title"><span>${escapeHtml(elderMode?'这次要做的事':'本次操作计划')}</span><span class="risk ${risk.className}" role="status" aria-label="${escapeHtml(risk.aria)}"><span class="risk-icon" aria-hidden="true">${risk.icon}</span><span>${escapeHtml(risk.text)}</span></span></div><div class="plan-summary">${escapeHtml(planView.plain_summary || planView.summary || '')}</div><div class="risk-reason">${escapeHtml(planView.risk_reason || friendlyReason(planView.risk_level))}</div>${details?`<ul class="plan-details">${details}</ul>`:''}${elderMode?`<details class="technical-steps"><summary>查看办理步骤</summary><ol class="steps">${steps}</ol></details>`:`<ol class="steps">${steps}</ol>`}${planView.requires_confirmation&&!resultView?`<div class="confirmation-hint">${escapeHtml(planView.confirmation_hint||'请核对后再继续。')}</div>`:''}${actions}${planView.awaiting_details?'<button class="details-action" id="transferDetailsBtn">补充转账信息</button>':''}${resultHtml}`;
+  const reason = /^既有权限规则[：:]\s*(green|yellow|red)$/.test(planView.risk_reason || '')
+    ? (planView.requires_strong_auth ? '请核对办理内容，并完成身份验证。' : planView.requires_confirmation ? '请核对办理内容，确认后继续。' : '本次仅查询，不会改变账户状态。')
+    : planView.risk_reason || friendlyReason(planView.risk_level);
+  panel.innerHTML=`<div class="plan-title"><span>${escapeHtml(elderMode?'这次要做的事':'本次操作计划')}</span><span class="risk ${risk.className}" role="status" aria-label="${escapeHtml(risk.aria)}"><span class="risk-icon" aria-hidden="true">${risk.icon}</span><span>${escapeHtml(risk.text)}</span></span></div><div class="plan-summary">${escapeHtml(planView.plain_summary || planView.summary || '')}</div><div class="risk-reason">${escapeHtml(reason)}</div>${details?`<ul class="plan-details">${details}</ul>`:''}${elderMode?`<details class="technical-steps"><summary>查看办理步骤</summary><ol class="steps">${steps}</ol></details>`:`<ol class="steps">${steps}</ol>`}${planView.requires_confirmation&&!resultView?`<div class="confirmation-hint">${escapeHtml(planView.confirmation_hint||'请核对后再继续。')}</div>`:''}${actions}${planView.awaiting_details?'<button class="details-action" id="transferDetailsBtn">补充转账信息</button>':''}${resultHtml}`;
   announceA11y(`${phaseLabel}。${resultView?.user_message || planView.plain_summary || planView.summary || ''}`, false);
   $('#transferDetailsBtn')?.addEventListener('click',()=>openTransferDialog(transferDraft));
   $('#confirmBtn')?.addEventListener('click',confirmPlan); $('#cancelBtn')?.addEventListener('click',cancelPlan);
@@ -290,7 +353,7 @@ function renderCurrentDisplay() {
   if (view.plan_view) renderPlan(view.plan_view, view.result_view || null);
   renderFraudWarning();
 }
-function receiveAgentResponse(data, updatePlan=true, speak=true) {
+function receiveAgentResponse(data, updatePlan=true, speak=true, allowDialogs=true) {
   renderHandoffCard(data.handoff_card || data.presentation?.standard?.handoff_card || null);
   const standard = data.presentation?.standard || data;
   const plain = data.presentation?.plain || data;
@@ -310,7 +373,7 @@ function receiveAgentResponse(data, updatePlan=true, speak=true) {
   if (elderMode && currentDisplay.warning) $('#elderFraudAlert').focus();
   if (data.awaiting_details && data.transfer_draft) {
     transferDraft = data.transfer_draft;
-    if (!data.conversation_followup) openTransferDialog(transferDraft);
+    if (allowDialogs && !data.conversation_followup) openTransferDialog(transferDraft);
   }
   if(standard.plan_view && dynamicTaskViews.has(standard.plan_view.plan_id))refreshDynamicTask(standard.plan_view.plan_id);
 }
@@ -490,6 +553,7 @@ $('#transferForm').addEventListener('submit',event=>{
 
 async function send(msg, {openTransferForm = false, displayText = msg, speechLabel = ''} = {}) {
   if (!msg || busy) return;
+  const startedInFocus = $('#focusDialog').open;
   speechPlayer.stop();
   if (speechLabel) announceA11y(speechLabel);
   addMessage(displayText,'user'); $('#messageInput').value=''; setBusy(true);
@@ -500,19 +564,24 @@ async function send(msg, {openTransferForm = false, displayText = msg, speechLab
       ...(ocrToken ? {ocr_review_token:ocrToken} : {}),
       ...(voiceToken ? {voice_source_token:voiceToken,voice_reviewed:true} : {})});
     $('#traceLabel').textContent=d.trace_id?'本次服务已记录':'已拦截';
-    receiveAgentResponse(d, true, !speechLabel || d.ok === false || d.blocked === true);
-    if (openTransferForm && d.conversation_followup) await openTransferDialog(d.transfer_draft);
+    const stillFocused = !startedInFocus || $('#focusDialog').open;
+    receiveAgentResponse(d, true, (!speechLabel || d.ok === false || d.blocked === true) && stillFocused, stillFocused);
+    if (openTransferForm && d.conversation_followup && (!startedInFocus || $('#focusDialog').open)) await openTransferDialog(d.transfer_draft);
     if(d.blocked) showToast('这次没有办理，请查看说明');
     await refreshState();
-  } catch(e) { addMessage('现在连接不上银行小助手，请检查服务是否已启动。'); announceA11y('连接失败'); showToast('连接失败'); }
+  } catch(e) {
+    addMessage('现在连接不上银行小助手，请检查服务是否已启动。'); announceA11y('连接失败'); showToast('连接失败');
+    if (startedInFocus && !currentPlan) $('#planPanel').innerHTML = '<div class="empty-state"><h3>连接失败</h3><p>暂时未取得办理结果。请稍后重试。</p></div>';
+  }
   finally { setBusy(false); }
 }
 async function confirmPlan() {
   if(!currentPlan || busy) return; setBusy(true);
+  const startedInFocus = focusDialog.open;
   try {
     const d=await postAgent('/api/confirm', {plan_id:currentPlan.plan_id,action_token:currentPlan.action_token});
     receiveAgentResponse(d);
-    if(d.needs_auth){if(d.auth_challenge?.method==='totp')$('#authDescription').textContent='为保障您的账户安全，请输入身份验证器中未使用的动态码。请勿向他人提供动态码。验证通过后，请核对办理内容并确认提交。'; $('#authModal').classList.remove('hidden'); $('#otpInput').focus(); return; }
+    if(d.needs_auth){if(startedInFocus && !focusDialog.open)return;if(d.auth_challenge?.method==='totp')$('#authDescription').textContent='为保障您的账户安全，请输入身份验证器中未使用的动态码。请勿向他人提供动态码。验证通过后，请核对办理内容并确认提交。'; $('#authModal').classList.remove('hidden'); $('#otpInput').focus(); return; }
     await refreshState();
   } catch(e){ announceA11y('结果待核实，请勿重复办理'); showToast('暂时无法确认办理结果，请先查看服务记录，不要重复转账'); } finally { setBusy(false); }
 }
@@ -711,8 +780,11 @@ voiceDialog.addEventListener('cancel',e=>{e.preventDefault();cancelVoice();});
 window.addEventListener('pagehide',cancelVoice);
 
 $('#composer').addEventListener('submit',e=>{e.preventDefault();send($('#messageInput').value.trim());});
-document.querySelectorAll('.quick').forEach(b=>b.addEventListener('click',()=>send(b.dataset.msg,
-  {openTransferForm:b.dataset.msg === '我要转账', speechLabel:b.querySelector('b').textContent.trim()})));
+document.querySelectorAll('.quick').forEach(b=>b.addEventListener('click',()=>{
+  if (busy) return;
+  openFocus(b);
+  send(b.dataset.msg, {openTransferForm:b.dataset.msg === '我要转账', speechLabel:b.querySelector('b').textContent.trim()});
+}));
 $('#elderToggle').addEventListener('click',()=>{ elderMode=!elderMode; savePreference('elderMode',String(elderMode)); applyElderMode(); });
 $('#customerServiceBtn').addEventListener('click', requestCustomerService);
 $('#newSupportRequestBtn').addEventListener('click',()=>{

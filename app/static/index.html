@@ -22,6 +22,7 @@
       </nav>
       <div class="top-actions">
         <button class="accessibility-toggle" id="elderToggle" type="button" aria-pressed="false">长辈模式：关</button>
+        <button class="accessibility-toggle" id="focusToggle" type="button" aria-pressed="false">大字聚焦：关</button>
         <button id="customerServiceBtn" class="customer-service" type="button">一键人工客服</button>
         <span class="security-pill"><i></i><span id="securityText">安全保护中</span></span>
         <button class="icon-button" id="auditBtn" aria-label="打开服务记录" title="服务记录">⌁</button>
@@ -62,7 +63,7 @@
       </section>
 
       <section class="quick-section">
-        <div class="section-heading"><div><h2>你可以直接点这里</h2><p>也可以在下面用自己的话说</p></div><span class="section-note">不用记按钮名称</span></div>
+        <div class="section-heading"><div><h2>你可以直接点这里</h2><p id="focusEntryHint">也可以在下面用自己的话说</p></div><span class="section-note">不用记按钮名称</span></div>
         <div class="quick-grid">
           <button class="quick" data-msg="帮我查一下账户余额" aria-label="查询账户余额"><span class="quick-icon mint">¥</span><b>查余额</b><small>看看账户还有多少钱</small><strong>→</strong></button>
           <button class="quick" data-msg="帮我看看最近的消费" aria-label="查看最近消费"><span class="quick-icon blue">◒</span><b>看消费</b><small>看看钱花到哪里了</small><strong>→</strong></button>
@@ -109,6 +110,12 @@
 
   <div class="modal hidden" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle"><div class="modal-card"><button class="modal-close" id="closeModal" aria-label="关闭">×</button><div class="modal-icon">盾</div><div class="modal-title" id="authTitle">身份验证</div><p id="authDescription">为保障您的账户安全，请输入验证码完成身份验证。请勿向他人提供验证码。此页面为模拟演示，请使用下方演示验证码。</p><input id="otpInput" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" aria-label="验证码"/><div class="modal-actions"><button class="ghost" id="cancelAuth">先不办理</button><button class="primary" id="verifyBtn">验证后继续</button></div><small id="demoOtpHint">正在读取演示验证码…</small></div></div>
   <div class="drawer hidden" id="auditDrawer" role="dialog" aria-modal="true" aria-labelledby="auditTitle"><div class="drawer-head"><div><b id="auditTitle">审计链回放</b><small>输入 trace_id，按时间顺序回看完整决策链</small></div><button class="ghost" id="closeAudit">关闭</button></div><form class="audit-replay-form" id="auditReplayForm"><label for="auditTraceInput">任务 trace_id</label><div class="audit-replay-controls"><input id="auditTraceInput" autocomplete="off" placeholder="例如 trace_xxx" aria-label="任务 trace_id"/><button class="primary" id="auditReplayBtn" type="submit">回放</button></div></form><div class="audit-summary" id="auditSummary" role="status"></div><div id="auditList"></div></div>
+  <dialog id="focusDialog" class="focus-dialog" aria-labelledby="focusTitle" aria-describedby="focusHint">
+    <header class="focus-header"><div><span class="focus-kicker">大字聚焦</span><h2 id="focusTitle">当前功能</h2></div><button id="focusClose" class="focus-back" type="button" autofocus>← 返回首页</button></header>
+    <p id="focusHint" class="focus-hint">点击周边空白也可返回。返回不会取消或重复办理。</p>
+    <div id="focusContent"></div>
+    <footer id="focusHelp" class="focus-help" aria-label="需要帮助"></footer>
+  </dialog>
   <dialog id="transferDialog" class="voice-dialog transfer-dialog" aria-labelledby="transferTitle" aria-describedby="transferScope">
     <h2 id="transferTitle">先把转账信息说清楚</h2>
     <p id="transferScope">这是模拟银行转账。请主动选择已核验的演示收款账户并填写金额；提交后只生成计划，不会扣款。真实核心替换点：银行收款人核验及账户选择接口。</p>
@@ -130,6 +137,7 @@
     <h2 id="settingsTitle">显示与帮助设置</h2>
     <p id="settingsScope">以下为本页显示与语音设置。银行业务仍需核对内容，并按提示确认。</p>
     <label class="voice-consent"><input id="settingsElderToggle" type="checkbox"/>长辈模式</label>
+    <label class="voice-consent"><input id="settingsFocusToggle" type="checkbox"/>大字聚焦：点击功能后单独放大</label>
     <label class="voice-consent"><input id="settingsVoicePrivacy" type="checkbox"/>语音播报时隐藏金额和账号</label>
     <h3>语音播报</h3>
     <label class="voice-consent"><input id="speechEnabled" type="checkbox" checked/>自动播报办理提示</label>
