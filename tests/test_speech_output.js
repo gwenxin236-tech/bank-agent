@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict');
-const {SpeechPlayer,safeText,chooseLocal,briefResponse,loadPreferences,savePreferences}=require('../app/static/speech-output.js');
+const {SpeechPlayer,safeText,chooseLocal,briefResponse,loadPreferences,savePreferences,pronounce}=require('../app/static/speech-output.js');
 const stored=new Map();const storage={getItem:k=>stored.get(k),setItem:(k,v)=>stored.set(k,v)};
 assert.equal(savePreferences(storage,{enabled:true,cloud:true,voice:'zh-CN-YunxiNeural',rate:0}),true);
 assert.deepEqual(loadPreferences(storage),{enabled:true,cloud:true,voice:'zh-CN-YunxiNeural',rate:0});
@@ -28,6 +28,29 @@ function setup(){
   return{env,history,revoked,statuses,requests,player:new SpeechPlayer(env)};
 }
 (async()=>{
+  assert.equal(pronounce('查余额'),'查询余额');
+  assert.equal(pronounce('转一笔钱'),'转账');
+  assert.equal(pronounce('查先生的转账记录'),'查先生的转账记录','do not rewrite names or arbitrary sentences');
+  const pack=require('../app/static/speech-prompts.json');
+  const quick=setup();quick.player.installPrompts(pack);
+  await quick.player.speak('查余额',{cloud:true,voice:'zh-CN-XiaoxiaoNeural',rate:0});
+  assert.equal(quick.requests.length,0,'fixed labels never wait for synthesis');
+  assert.equal(quick.history[0].playbackRate,1);
+  quick.player.stop();
+  await quick.player.speak('查余额',{cloud:true,voice:'zh-CN-XiaoxiaoNeural',rate:-20});
+  assert.equal(quick.history.length,2,'a new click after stop must not be suppressed');
+  assert.equal(quick.history[1].playbackRate,.8);
+  assert.equal(quick.history[1].preservesPitch,true);
+  await quick.player.speak('转一笔钱',{cloud:false,voice:'zh-CN-YunxiNeural',rate:10});
+  assert.equal(quick.requests.length,0,'bundled natural speech works without cloud consent');
+  assert.equal(quick.history.at(-1).playbackRate,1.1);
+  quick.player.stop();assert.ok(quick.history.at(-1).paused);
+  const waiting=setup();let finishPack;waiting.env.fetch=()=>new Promise(r=>finishPack=r);
+  const load=waiting.player.preparePrompts();const speech=waiting.player.speak('查余额',{cloud:true});
+  waiting.player.stop();finishPack({ok:true,json:async()=>pack});await load;await speech;
+  assert.equal(waiting.history.length,0,'stopped playback must not start after preload finishes');
+  const fallback=setup();await fallback.player.speak('查余额',{cloud:false});
+  assert.equal(fallback.history[0].text,'查询余额');
   // Execute the actual send handler: a shortcut speaks its label once, and its
   // successful response must not replace it with a long banking explanation.
   const vm=require('node:vm'),fs=require('node:fs');

@@ -144,10 +144,12 @@ $('#speechCloud').checked=speechPreferences.cloud;
 $('#speechVoice').value=speechPreferences.voice;
 $('#speechRate').value=String(speechPreferences.rate);
 const speechPlayer = new BankSpeech.SpeechPlayer({
-  fetch: (...args)=>fetch(...args), Audio, URL, speechSynthesis:window.speechSynthesis,
+  fetch: (...args)=>fetch(...args), Audio, URL, preloadAudio:true, speechSynthesis:window.speechSynthesis,
   Utterance:window.SpeechSynthesisUtterance, headers:()=>demoSessionHeaders,
   status:text=>{ $('#speechStatus').textContent=text; }
 });
+// Only bundled public phrases are preloaded. No synthesis, user text or bank calls.
+speechPlayer.preparePrompts();
 function speechSafe(text) { return voicePrivacy ? BankSpeech.safeText(text) : String(text ?? ''); }
 function announceA11y(text, speak = true) {
   const spoken = speechSafe(text);
@@ -177,9 +179,9 @@ fetch('/api/v1/voice/output-capabilities').then(r=>r.json()).then(data=>{
   $('#speechCloud').disabled=false;
   $('#speechStatus').textContent=$('#speechCloud').checked
     ?(data.available?'已恢复自然语音设置，可点击试听。':'自然语音暂不可用，已保留您的选择，不会自动切换音源。')
-    :(data.available?'当前使用本机普通话；启用联网自然语音可提升音质。':'当前使用本机普通话；联网语音尚未启用。');
+    :(data.available?'常用提示使用本地自然语音；其他内容可启用联网播报。':'常用提示使用本地自然语音；其他内容使用本机普通话。');
 }).catch(()=>{$('#speechCloud').disabled=false;$('#speechStatus').textContent=$('#speechCloud').checked
-  ?'自然语音暂不可用，已保留您的选择，不会自动切换音源。':'联网语音暂不可用，可使用本机普通话。';});
+  ?'自然语音暂不可用，已保留您的选择，不会自动切换音源。':'常用提示使用本地自然语音；其他内容可使用本机普通话。';});
 function applyVoicePrivacy() {
   const toggle = $('#voicePrivacyToggle');
   if (!toggle) return;

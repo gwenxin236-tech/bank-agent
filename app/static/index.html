@@ -9,6 +9,7 @@
   <link rel="manifest" href="/static/manifest.json" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="preload" href="/static/speech-prompts.json" as="fetch" crossorigin="anonymous" />
 </head>
 <body>
   <div class="app-shell">
@@ -140,9 +141,10 @@
     <label class="voice-consent"><input id="settingsFocusToggle" type="checkbox"/>大字聚焦：点击功能后单独放大</label>
     <label class="voice-consent"><input id="settingsVoicePrivacy" type="checkbox"/>语音播报时隐藏金额和账号</label>
     <h3>语音播报</h3>
+    <p><small>常用功能与办理提示使用预置自然语音，点击即可播放，无需联网合成。“查余额”播报为“查询余额”，“转一笔钱”播报为“转账”。</small></p>
     <label class="voice-consent"><input id="speechEnabled" type="checkbox" checked/>自动播报办理提示</label>
     <label class="voice-consent"><input id="speechCloud" type="checkbox"/>启用联网自然语音</label>
-    <p><small>联网语音将播报文字发送至 Microsoft 语音服务，金额、账号及验证码会隐藏。音源、音色和语速保存在本机，刷新后继续生效；关闭联网语音后使用本机普通话。</small></p>
+    <p><small>其他内容启用联网语音时，会将处理后的文字发送至 Microsoft 语音服务，金额、账号及验证码会隐藏。音色和语速保存在本机；关闭联网语音后，常用提示仍使用预置自然语音，其他内容使用本机普通话。</small></p>
     <label for="speechVoice">普通话音色</label>
     <select id="speechVoice"><option value="zh-CN-XiaoxiaoNeural">晓晓 · 自然女声</option><option value="zh-CN-YunxiNeural">云希 · 清晰男声</option></select>
     <label for="speechRate">语速</label>
