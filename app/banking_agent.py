@@ -370,6 +370,14 @@ class AgentPlan:
             details.append("授权层：确认后先核验办理条件；符合条件才提交停止未来扣费申请，结果以回执为准。")
             details.append("服务层：服务可能仍有效到订阅有效期结束；退款金额与状态需单独核验。")
             details.append("交易层：历史扣款可查询；未来少扣的钱不算已到账退款。")
+            if not self.entities.get('subscription_id'):
+                details = ['本次只查询订阅列表，不取消任何订阅。选择具体项目后，需要重新确认办理。']
+        elif self.intent == 'card_manage':
+            if self.entities.get('card_operation') == 'unreport_loss':
+                details.append('请先确认卡片已找回且由本人保管，再确认解挂。卡片尚未找回时请保持挂失。')
+                details.append('解挂后仍需核对余额、限额及付款条件，不代表所有付款立即恢复。')
+            if self.entities.get('unloss_block_reason'):
+                details.append(self.entities['unloss_block_reason'])
         elif self.intent == "fraud_guard":
             details.append("系统发现这笔转账可能涉及诈骗话术或异常收款人。")
             details.append(f"不会扣钱，先暂停{POLICY['cooling_off_hours']}小时，并提醒已授权的守护家人。")
@@ -450,6 +458,20 @@ def card_label(card):
     tail = card.get('last4')
     suffix = f'尾号{tail}' if isinstance(tail, str) and re.fullmatch(r'[0-9]{4}', tail) else '尾号待核实'
     return f"{card.get('name') or '银行卡'}（{suffix}）"
+
+
+def subscription_label(item):
+    amount = item.get('amount_cents')
+    price = money(amount) if type(amount) is int and amount >= 0 else '待核实'
+    return f"{item.get('merchant') or '待核验订阅'}（每期金额：{price}）"
+
+
+def unqualified_card_request(text):
+    # Only generic wording may default to the sole known card. Any remaining
+    # issuer, product, ordinal or account qualifier requires explicit selection.
+    return re.fullmatch(r'(?:请|麻烦|帮我|帮忙|给我|为我|我|本人|的|银行卡|卡片|卡|'
+                        r'办理|申请|进行|一下|先|再|已经|已|了|丢失|丢|不见|找回|找到|'
+                        r'挂失|解挂|解除|取消|[\s，,。.!！;；])+', text) is not None
 
 
 def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -541,6 +563,8 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
         message = (f"已确认停止未来扣费（订阅：{data.get('merchant', '该订阅')}）；"
                    f"服务记录中的到期日为{service.get('valid_until', '待核验')}，当前使用权益请向服务商核实；"
                    f"退款状态待核验（金额 {money(refund.get('amount_cents', 0))}，不是已到账退款）。") if data else "订阅取消操作没有返回可核验结果。"
+        if not plan.entities.get('subscription_id') and 'list_subscriptions' in data_by_tool:
+            message = '已查询订阅列表，请选择具体项目后核对新计划。本次未取消任何订阅。'
     elif plan.intent == "transfer":
         data = data_by_tool.get("create_transfer", {})
         if data.get("transaction_id"):
@@ -574,6 +598,8 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
             states = {'正常':'正常', 'normal':'正常', 'active':'正常', 'reported_loss':'已挂失', '挂失':'已挂失'}
             message = ('卡片状态：' + '；'.join(f"{card_label(c)}：{states.get(c.get('status'), '待核实')}" for c in cards)
                        + '。本次仅查询，未办理挂失或解挂。') if cards else '本次查询范围内未发现卡片。'
+            if plan.entities.get('unloss_block_reason'):
+                message += plan.entities['unloss_block_reason']
         if data.get('service_scope') in {'LOCAL_PROTOCOL_TEST','FINERACT_LOCAL_SIMULATOR'}:
             message='本地卡管协议演示：'+message.replace('银行返回','服务替身返回')
     elif plan.intent == "fraud_guard":
@@ -2076,12 +2102,28 @@ class IntentParser:
         if '密码' in t and any(word in t for word in ('修改', '重置', '更改')):
             return 'password_change', {}
         # Negation and status questions are read requests, before any model or keyword routing.
-        negative = r'(?:不要|不用|不想|不需要|先别|别|暂不|暂时不|不(?=挂失|解挂|取消|关闭|清理|办理|进行))[^，,。；;！？!?]*(?:挂失|解挂|取消|关闭|清理)'
-        status_question = r'(?:挂失|解挂|取消|关闭)[^，,。；;！？!?]*(?:了吗|了没有|了没|是否成功|成功了吗)'
-        read_only = bool(re.search(negative, t) or re.search(status_question, t))
+        operations = r'挂失|解挂|取消|关闭|关掉|清理'
+        negative = r'(?:不要|不用|不想|不需要|不打算|不同意|不允许|先别|别|暂不|暂时不|并非|不是|没有(?:要|想|要求|让|打算)|不(?=挂失|解挂|取消|关闭|关掉|清理|办理|进行))[^，,。；;！？!?]*(?:' + operations + ')'
+        # Classify action-bearing clauses, not just the position of a keyword.
+        # A later question about refunds must not negate an explicit cancellation.
+        inquiry = r'查询|查一下|看看|咨询|了解|请问|是否|有没有|怎么|如何|怎样|什么|哪些|能否|可否|条件|流程|费用|影响|后果|[吗么?？]|了没有|了没'
+        clauses = re.split(r'[，,。；;！!]', t)
+        read_only = bool(re.search(negative, t) or any(re.search(operations, c) and
+                        (re.search(inquiry, c) or re.search(r'(?:已经|已)(?:取消|关闭|关掉|挂失|解挂)', c)) for c in clauses))
+        subscription_like = any(w in t for w in ('订阅', '会员', '自动扣费', '自动续费', '代扣'))
+        request_prefix = r'(?:请|麻烦|帮我|给我|我要|我想|我需要|我决定|我确认|确认|现在|立即|先)*'
+        requested_cancel = any(
+            re.match(r'^' + request_prefix + r'(?:(?:取消|关闭|关掉|清理)|(?:把|将).*(?:取消|关闭|关掉|清理))', c.strip()) or
+            re.fullmatch(r'(?:我的|这个)?(?:某视频|视频|云盘)?(?:会员|订阅|自动续费|自动扣费|代扣)(?:请|帮我|给我)?(?:取消|关闭|关掉|清理)(?:一下|掉|吧)?', c.strip())
+            for c in clauses)
+        if subscription_like and not requested_cancel and not re.search(r'转账|转给|转\s*\d|汇款|汇给|打款', t):
+            read_only = True
+        if (any(w in t for w in ('解挂', '解除挂失', '取消挂失')) and
+                re.search(r'(?:还没|没有|尚未|未)(?:有)?(?:找回|找到)|不在(?:我|本人).*手', t)):
+            return 'card_manage', {'unloss_block_reason':'卡片尚未找回或不在本人保管时，请保持挂失；找回后再申请解挂。'}
         if (read_only or re.search(r'(?:取消|撤销)[^，,。；;]*(?:挂失|解挂)(?:申请|操作)', t)) and any(w in t for w in ('卡', '挂失', '解挂')):
             return 'card_manage', {}
-        if read_only and any(w in t for w in ('订阅', '会员', '自动扣费', '自动续费', '代扣')):
+        if read_only and subscription_like:
             return 'subscription_query', {}
         card_match = re.fullmatch(r'(挂失|解挂)卡片编号(card_[A-Za-z0-9_-]+)', t)
         if card_match:
@@ -2166,8 +2208,8 @@ class IntentParser:
             return "bill_analysis", {}
         if any(k in t for k in ["交易记录", "最近消费", "最近的消费", "流水"]):
             return "transaction_query", {}
-        if any(k in t for k in ["订阅", "自动扣费", "代扣", "会员"]):
-            if any(k in t for k in ["取消", "关闭", "清理"]):
+        if any(k in t for k in ["订阅", "自动扣费", "自动续费", "代扣", "会员"]):
+            if any(k in t for k in ["取消", "关闭", "关掉", "清理"]):
                 sid = "sub_001" if "视频" in t and "云盘" not in t else "sub_002" if "云盘" in t and "视频" not in t else None
                 return "subscription_cancel", {"suggested_subscription_id": sid}
             return "subscription_query", {}
@@ -2300,19 +2342,28 @@ class Planner:
         if intent == 'card_manage' and entities.get('card_operation'):
             selected = entities.get('card_id')
             tails = re.findall(r'尾号\s*([0-9]{4})(?![0-9])', text)
-            if not selected and len(tails) == 1:
-                tail_matches = [c for c in self.bank.cards if c.get('last4') == tails[0]]
-                if len(tail_matches) == 1:
-                    selected = tail_matches[0].get('id')
-            # Only an unqualified request with exactly one trusted card can use that card.
-            if not selected and len(self.bank.cards) == 1 and not re.search(r'第|尾号|卡号|编号|另一|那张|这张', text):
-                selected = self.bank.cards[0].get('id')
+            if not selected:
+                candidates = []
+                for card in self.bank.cards:
+                    name = card.get('name')
+                    named = isinstance(name, str) and bool(name) and name in text
+                    if tails and (len(tails) != 1 or card.get('last4') != tails[0]):
+                        continue
+                    if not tails and not named and len(self.bank.cards) != 1:
+                        continue
+                    remainder = text.replace(name, '') if named else text
+                    remainder = re.sub(r'尾号\s*[0-9]{4}(?![0-9])', '', remainder)
+                    if unqualified_card_request(remainder):
+                        candidates.append(card)
+                if len(candidates) == 1:
+                    selected = candidates[0].get('id')
             matches = [c for c in self.bank.cards if c.get('id') == selected] if selected else []
             entities['card_id'] = selected if len(matches) == 1 else None
             entities['card_name'] = card_label(matches[0]) if len(matches) == 1 else None
         if intent == "subscription_cancel":
             candidate = entities.get("suggested_subscription_id") or entities.get("subscription_id")
-            sub = next((x for x in self.bank.subscriptions if x['id'] == candidate), None)
+            matches = [x for x in self.bank.subscriptions if x.get('id') == candidate] if candidate else []
+            sub = matches[0] if len(matches) == 1 else None
             # Reject model-supplied names/prices and bind the exact visible target to consent.
             entities = {"subscription_id": sub['id'] if sub else None,
                         "suggested_subscription_id": candidate,
@@ -2344,8 +2395,10 @@ class Planner:
             summary, steps = "查询自动续费与订阅服务", [PlanStep("s1", "读取订阅列表", "list_subscriptions")]
         elif intent == "subscription_cancel":
             summary = (f"申请停止{entities['subscription_name']}的自动扣费（每期{money(entities['subscription_amount_cents'])}）；确认后核验办理条件"
-                       if entities.get('subscription_id') else "请说明要取消哪个订阅：视频会员还是云盘会员")
-            steps = [PlanStep("s1", "定位订阅", "list_subscriptions"), PlanStep("s2", "取消订阅", "cancel_subscription")]
+                       if entities.get('subscription_id') else "请先确认查询订阅列表，再选择要停止扣费的项目；本次不取消订阅")
+            steps = [PlanStep("s1", "查询订阅列表", "list_subscriptions")]
+            if entities.get('subscription_id'):
+                steps.append(PlanStep("s2", "取消订阅", "cancel_subscription"))
         elif intent == "card_manage":
             operation = entities.get("card_operation")
             if actor_id in self.bank.guardianships.accounts:
@@ -2356,7 +2409,7 @@ class Planner:
                 summary = f"挂失{entities['card_name']}；先强验证，再核验挂失后的卡片状态"
                 steps = [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "挂失卡片", "report_card_loss"), PlanStep("s3", "核验挂失后的卡片状态", "verify_card_status")]
             elif operation == "unreport_loss":
-                summary = f"解除{entities['card_name']}挂失；先强验证，再核验恢复后的卡片状态"
+                summary = f"解除{entities['card_name']}挂失；请先确认卡片已找回且由本人保管，再验证身份并确认办理"
                 steps = [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "解除卡片挂失", "unreport_card_loss"), PlanStep("s3", "核验解挂后的卡片状态", "verify_card_status")]
             else:
                 summary, steps = "进入卡片管理流程，需要进一步选择操作", [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "人工确认具体卡片操作", "human_handoff")]
@@ -2617,16 +2670,18 @@ class AgentRuntime(RecoveryMixin):
                     if sum(other.get('id') == item_id for other in values) != 1:
                         continue
                     if domain == 'subscription':
-                        choices.append({'label':item.get('merchant') or '待核验订阅',
-                            'detail': '可申请停止扣费' if item.get('terminable') and item.get('debit_state') == 'active' else '需核实扣费状态或办理渠道',
-                            'request':'取消订阅编号' + item_id if item.get('terminable') and item.get('debit_state') == 'active' else ''})
+                        distinguishable = sum(subscription_label(other) == subscription_label(item) for other in values) == 1
+                        eligible = distinguishable and item.get('terminable') and item.get('debit_state') == 'active'
+                        choices.append({'label':subscription_label(item),
+                            'detail': ('可申请停止扣费' if eligible else '需核实扣费状态或办理渠道') if distinguishable else '订阅信息相同，请联系人工核实',
+                            'request':'取消订阅编号' + item_id if eligible else ''})
                     else:
                         status = item.get('status')
                         operation = '挂失' if status in ('normal','active','正常') else '解挂' if status in ('reported_loss','挂失') else ''
                         distinguishable = sum(card_label(other) == card_label(item) for other in values) == 1
                         choices.append({'label':card_label(item),
                                         'detail': ('已挂失' if operation == '解挂' else '正常' if operation else '状态待核实') if distinguishable else '卡片信息相同，请联系人工核实',
-                                        'request':operation + '卡片编号' + item_id if operation and distinguishable else ''})
+                                        'request':operation + '卡片编号' + item_id if operation and distinguishable and not plan.entities.get('unloss_block_reason') else ''})
                 plan.coordination['domain_guidance'] = {
                     'domain':domain, 'title':'订阅办理核验' if domain == 'subscription' else '卡片办理核验',
                     'notes':list(finding.recommendations), 'choices':choices,
@@ -2985,7 +3040,7 @@ class AgentRuntime(RecoveryMixin):
             payload["result"] = result
             payload["result_view"] = present_result(plan, result)
             guidance = payload['plan_view'].get('domain_guidance')
-            if guidance and plan.intent == 'subscription_cancel':
+            if guidance and plan.intent == 'subscription_cancel' and plan.entities.get('subscription_id'):
                 guidance = copy.deepcopy(guidance)
                 guidance['phase'] = '办理前查询的资料；是否停止扣费以本次回执为准'
                 guidance['choices'] = []
@@ -3128,11 +3183,6 @@ class AgentRuntime(RecoveryMixin):
             return self._response(plan, plan.summary)
         if plan.intent == 'birthday_linkage' and plan.entities.get('schedule_error'):
             return self._response(plan, plan.entities['schedule_error'], blocked=True)
-        if plan.intent == "subscription_cancel" and not plan.entities.get("subscription_id"):
-            result = self.execute(plan)  # read-only lookup followed by a rejected cancellation step
-            response = self._response(plan, result['error'], result, blocked=True)
-            response['ok'] = False
-            return response
         if self._invalid_input(plan):
             if context is not None and plan.intent == 'transfer':
                 context.remember(plan.entities)

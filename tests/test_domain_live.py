@@ -7,6 +7,93 @@ from test_domain_snapshots import SnapshotFixture
 
 
 class DomainLiveTests(SnapshotFixture, unittest.TestCase):
+    def test_missing_subscription_target_requires_read_confirmation_then_selection(self):
+        with patch.object(self.rt.bank, 'subscriptions_query', wraps=self.rt.bank.subscriptions_query) as query, \
+             patch.object(self.rt.bank, 'cancel_subscription', side_effect=AssertionError('unexpected write')):
+            out = self.rt.chat('取消订阅')
+            query.assert_not_called()
+            self.assertTrue(out['plan_view']['requires_confirmation'])
+            self.assertNotIn('result', out)
+            self.assertEqual([s['tool'] for s in out['plan']['steps']], ['list_subscriptions'])
+            done = self.finish_plan(out)
+            self.assertEqual(query.call_count, 1)
+            self.assertEqual(done['result']['status'], 'SUCCESS')
+            self.assertTrue(done['plan_view']['domain_guidance']['choices'])
+            self.assertIn('未取消', done['result_view']['user_message'])
+
+    def test_questions_and_negations_cannot_become_domain_writes(self):
+        phrases = ('查询视频会员是否已经取消', '帮我看看视频会员取消需要什么条件',
+                   '视频会员能否取消', '请问怎么关闭自动续费', '视频会员取消后会退款吗',
+                   '自动续费关掉了吗', '不要关掉视频会员',
+                   '我不是要取消视频会员', '我没有要挂失银行卡，只查状态',
+                   '我不是要挂失银行卡', '我并没有要求解挂银行卡', '银行卡挂失有什么影响')
+        for text in phrases:
+            with self.subTest(text=text), patch.object(self.rt.parser.llm, 'parse', side_effect=AssertionError('read guard must precede model')):
+                out = self.rt.chat(text)
+                self.assertFalse({'cancel_subscription','report_card_loss','unreport_card_loss'} &
+                                 {s['tool'] for s in out['plan']['steps']})
+                self.finish_plan(out)
+        self.assertEqual(self.rt.bank.cards[0]['status'], '正常')
+        self.assertEqual(self.rt.bank.subscriptions[0]['status'], 'active')
+
+    def test_subscription_write_needs_an_action_request_not_a_mention(self):
+        for text in ('我从未取消视频会员', '他让我取消视频会员', '听说取消视频会员很麻烦', '查询订阅'):
+            with self.subTest(text=text), patch.object(self.rt.parser.llm, 'parse', side_effect=AssertionError('read must stay read')):
+                out = self.rt.chat(text)
+                self.assertNotIn('cancel_subscription', [s['tool'] for s in out['plan']['steps']])
+        for text in ('请把视频会员取消', '视频会员帮我取消', '我想取消视频会员', '取消某视频会员，退款到账了吗',
+                     '帮我关掉视频会员', '把视频会员关掉'):
+            with self.subTest(text=text):
+                out = self.rt.chat(text)
+                self.assertIn('cancel_subscription', [s['tool'] for s in out['plan']['steps']])
+
+    def test_explicit_unknown_card_name_is_not_defaulted(self):
+        for text in ('挂失我的工商银行卡', '挂失我的建设银行储蓄卡', '挂失我的信用卡',
+                     '挂失工商银行尾号6222的银行卡'):
+            with self.subTest(text=text):
+                out = self.rt.chat(text)
+                self.assertFalse(out['plan']['entities'].get('card_id'))
+                self.assertNotIn('report_card_loss', [s['tool'] for s in out['plan']['steps']])
+
+    def test_exact_trusted_card_name_can_select_without_defaulting(self):
+        self.rt.bank.cards.append(dict(self.rt.bank.cards[0],id='card_002',name='备用储蓄卡',last4='1234'))
+        out = self.rt.chat('请帮我挂失备用储蓄卡')
+        self.assertEqual(out['plan']['entities'].get('card_id'), 'card_002')
+        self.assertTrue(out['plan_view']['requires_strong_auth'])
+
+    def test_unloss_reminder_is_visible_before_confirmation_and_auth(self):
+        self.rt.bank.cards[0]['status'] = 'reported_loss'
+        out = self.rt.chat('帮我解挂银行卡')
+        for word in ('已找回', '本人保管'):
+            self.assertIn(word, str(out['plan_view']))
+        pid, token = out['plan']['plan_id'], out['plan_view']['action_token']
+        with patch.object(self.rt.bank, 'unreport_card_loss', side_effect=AssertionError('unexpected write')):
+            challenged = self.rt.confirm(pid, token)
+        self.assertTrue(challenged['needs_auth'])
+        self.assertIn('本人保管', str(challenged['plan_view']))
+
+    def test_explicit_unrecovered_card_never_gets_unloss_plan(self):
+        self.rt.bank.cards[0]['status'] = 'reported_loss'
+        with patch.object(self.rt.bank, 'unreport_card_loss', side_effect=AssertionError('unexpected write')):
+            out = self.rt.chat('我的银行卡还没有找到，帮我解挂')
+            self.assertNotIn('unreport_card_loss', [s['tool'] for s in out['plan']['steps']])
+            done = self.finish_plan(out)
+        self.assertIn('找回', str(done['plan_view']))
+        self.assertFalse(any(c['request'] for c in done['plan_view']['domain_guidance']['choices']))
+
+    def test_same_merchant_choices_show_price_and_block_identical_labels(self):
+        extra = copy.deepcopy(self.rt.bank.subscriptions[0])
+        extra.update(id='sub_003', amount_cents=9900)
+        self.rt.bank.subscriptions.append(extra)
+        done = self.complete('查询订阅')
+        choices = done['plan_view']['domain_guidance']['choices']
+        self.assertIn('25.00', choices[0]['label']); self.assertIn('99.00', choices[2]['label'])
+        self.assertNotEqual(choices[0]['label'], choices[2]['label'])
+        extra['amount_cents'] = 2500
+        done = self.complete('查询订阅')
+        choices = done['plan_view']['domain_guidance']['choices']
+        self.assertFalse(choices[0]['request']); self.assertFalse(choices[2]['request'])
+
     def finish_plan(self, out):
         if out.get('result'):
             return out
@@ -30,7 +117,7 @@ class DomainLiveTests(SnapshotFixture, unittest.TestCase):
                 self.assertEqual(before, (self.rt.bank.cards, self.rt.bank.subscriptions))
 
     def test_bank_card_mention_does_not_steal_payment(self):
-        for text in ('给妈妈银行卡转100元', '给妈妈的银行卡转100元'):
+        for text in ('给妈妈银行卡转100元', '给妈妈的银行卡转100元', '给妈妈转100元，备注视频会员费用'):
             out = self.rt.chat(text)
             self.assertEqual(out['plan']['intent'], 'transfer')
             self.assertEqual(out['plan']['entities']['beneficiary'], '妈妈')
@@ -208,6 +295,9 @@ class DomainLiveTests(SnapshotFixture, unittest.TestCase):
         if not node or not module:
             self.skipTest('Browser QA requires C7_NODE_BINARY and C7_PLAYWRIGHT_MODULE')
         self.rt.bank.cards.append(dict(self.rt.bank.cards[0], id='card_002', last4='1234'))
+        extra = copy.deepcopy(self.rt.bank.subscriptions[0])
+        extra.update(id='sub_003', amount_cents=9900)
+        self.rt.bank.subscriptions.append(extra)
         script = r'''
 const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require('node:assert/strict');
 (async()=>{const browser=await chromium.launch({headless:true});try{
@@ -232,10 +322,21 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
  await send('给妈妈银行卡转100元');assert.match(await p.locator('#planPanel').innerText(),/妈妈/);
  assert.match(await p.evaluate(()=>currentPlan.summary),/向妈妈转账/);
  assert.equal(await p.locator('#confirmBtn').count(),0);
- await send('解挂尾号1234的银行卡');await authenticate();assert.match(await p.locator('#chatLog').innerText(),/1234.*已解挂/);
+ await send('解挂尾号1234的银行卡');assert.match(await p.locator('#planPanel').innerText(),/已找回且由本人保管/);await authenticate();assert.match(await p.locator('#chatLog').innerText(),/1234.*已解挂/);
  await send('给妈妈银行卡转100元');
  await p.locator('#confirmBtn').click();await p.waitForFunction(()=>!busy&&currentResultView?.status==='SUCCESS');
  assert.match(await p.locator('#chatLog').innerText(),/已向妈妈转账/);
+ await send('我没有要挂失银行卡，只查状态');assert.equal(await p.locator('#confirmBtn').count(),0);
+ await send('挂失我的工商银行卡');assert.equal(await p.locator('#confirmBtn').count(),0);
+ await send('查询视频会员是否已经取消');await p.locator('#confirmBtn').click();await p.waitForFunction(()=>!busy&&currentResultView?.status==='SUCCESS');
+ await send('取消订阅');assert.equal(await p.locator('#domainGuidance').count(),0);assert.match(await p.locator('#planPanel').innerText(),/本次不取消订阅/);
+ await p.locator('#confirmBtn').click();await p.waitForFunction(()=>!busy&&currentResultView?.status==='SUCCESS');
+ assert.match(await p.locator('#chatLog').innerText(),/本次未取消任何订阅/);
+ const selected=p.locator('.domain-choice').filter({hasText:'99.00'});assert.equal(await selected.count(),1);
+ await selected.getByRole('button',{name:'申请停止扣费',exact:true}).click();await p.waitForFunction(()=>!busy);
+ assert.match(await p.locator('#planPanel').innerText(),/99.00/);
+ await p.locator('#confirmBtn').click();await p.waitForFunction(()=>!busy&&currentResultView?.status==='SUCCESS');
+ assert.match(await p.locator('#chatLog').innerText(),/已确认停止未来扣费/);
  assert.deepEqual(errors,[]);
  if(process.env.DOMAIN_QA_SCREENSHOT)await p.screenshot({path:process.env.DOMAIN_QA_SCREENSHOT,fullPage:true});
 }finally{await browser.close()}})().catch(e=>{console.error(e);process.exit(1)});
@@ -252,5 +353,6 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
                     self.assertEqual(self.rt.bank.cards[0]['status'], '正常')
                     self.assertEqual(self.rt.bank.cards[1]['status'], '正常')
                     self.assertEqual(self.rt.bank.subscriptions[0]['status'], 'active')
+                    self.assertEqual(self.rt.bank.subscriptions[2]['status'], 'cancelled')
                 finally:
                     server.shutdown(); thread.join(timeout=5)
