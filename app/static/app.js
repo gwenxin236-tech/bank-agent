@@ -77,6 +77,12 @@ function riskMeta(level, phase) {
   const label = labels[normalized];
   return {className: normalized, icon: icons[normalized], text: `${label} · ${phase}`, aria: `风险等级：${label}；状态：${phase}`};
 }
+function speechStorage(){try{return window.localStorage;}catch(_){return null;}}
+const speechPreferences = BankSpeech.loadPreferences(speechStorage());
+$('#speechEnabled').checked=speechPreferences.enabled;
+$('#speechCloud').checked=speechPreferences.cloud;
+$('#speechVoice').value=speechPreferences.voice;
+$('#speechRate').value=String(speechPreferences.rate);
 const speechPlayer = new BankSpeech.SpeechPlayer({
   fetch: (...args)=>fetch(...args), Audio, URL, speechSynthesis:window.speechSynthesis,
   Utterance:window.SpeechSynthesisUtterance, headers:()=>demoSessionHeaders,
@@ -96,13 +102,24 @@ $('#speechPreview').addEventListener('click',()=>speechPlayer.speak(BankSpeech.S
   voice:$('#speechVoice').value, rate:Number($('#speechRate').value)
 }));
 $('#speechStop').addEventListener('click',()=>{speechPlayer.stop();$('#speechStatus').textContent='已停止播报';});
-for(const id of ['speechEnabled','speechCloud','speechVoice','speechRate','settingsVoicePrivacy','voicePrivacyToggle'])
-  $('#'+id).addEventListener('change',()=>{speechPlayer.stop();$('#speechStatus').textContent='设置已更新，可点击试听。';});
+for(const id of ['speechEnabled','speechCloud','speechVoice','speechRate'])
+  $('#'+id).addEventListener('change',()=>{
+    speechPlayer.stop();
+    const saved=BankSpeech.savePreferences(speechStorage(),{enabled:$('#speechEnabled').checked,
+      cloud:$('#speechCloud').checked,voice:$('#speechVoice').value,rate:Number($('#speechRate').value)});
+    $('#speechStatus').textContent=saved?'语音设置已保存，刷新后继续生效。':'浏览器无法保存设置，仅本次页面有效。';
+  });
+for(const id of ['settingsVoicePrivacy','voicePrivacyToggle'])
+  $('#'+id).addEventListener('change',()=>{speechPlayer.stop();$('#speechStatus').textContent='隐私设置已更新。';});
 window.addEventListener('pagehide',()=>speechPlayer.stop());
 fetch('/api/v1/voice/output-capabilities').then(r=>r.json()).then(data=>{
-  $('#speechCloud').disabled=!data.available;
-  $('#speechStatus').textContent=data.available?'自然语音已就绪，启用联网语音后可试听。':'当前使用本机普通话；联网语音尚未启用。';
-}).catch(()=>{$('#speechCloud').disabled=true;$('#speechStatus').textContent='联网语音暂不可用，可使用本机普通话。';});
+  // Keep the saved source editable even when the provider is unavailable.
+  $('#speechCloud').disabled=false;
+  $('#speechStatus').textContent=$('#speechCloud').checked
+    ?(data.available?'已恢复自然语音设置，可点击试听。':'自然语音暂不可用，已保留您的选择，不会自动切换音源。')
+    :(data.available?'当前使用本机普通话；启用联网自然语音可提升音质。':'当前使用本机普通话；联网语音尚未启用。');
+}).catch(()=>{$('#speechCloud').disabled=false;$('#speechStatus').textContent=$('#speechCloud').checked
+  ?'自然语音暂不可用，已保留您的选择，不会自动切换音源。':'联网语音暂不可用，可使用本机普通话。';});
 function applyVoicePrivacy() {
   const toggle = $('#voicePrivacyToggle');
   if (!toggle) return;

@@ -2,6 +2,21 @@
 (function (root) {
   'use strict';
   const SAMPLE = '看消费';
+  const PREFERENCES_KEY = 'bankSpeechPreferences.v1';
+  function preferences(value={}) {
+    return {enabled:typeof value?.enabled==='boolean'?value.enabled:true,
+      cloud:value?.cloud===true,
+      voice:['zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural'].includes(value?.voice)?value.voice:'zh-CN-XiaoxiaoNeural',
+      rate:[-20,-8,0,10].includes(value?.rate)?value.rate:-8};
+  }
+  function loadPreferences(storage) {
+    try{return preferences(JSON.parse(storage?.getItem(PREFERENCES_KEY) || '{}'));}
+    catch(_){return preferences();}
+  }
+  function savePreferences(storage, value) {
+    try{if(!storage)return false;storage.setItem(PREFERENCES_KEY,JSON.stringify(preferences(value)));return true;}
+    catch(_){return false;}
+  }
   function briefResponse(data) {
     if(data.blocked)return '已拦截，请核实';
     if(data.needs_auth)return '请验证身份';
@@ -71,6 +86,6 @@
       }
     }
   }
-  root.BankSpeech={SpeechPlayer,safeText,normalize,chooseLocal,briefResponse,SAMPLE};
+  root.BankSpeech={SpeechPlayer,safeText,normalize,chooseLocal,briefResponse,SAMPLE,loadPreferences,savePreferences};
   if(typeof module!=='undefined')module.exports=root.BankSpeech;
 })(typeof window==='undefined'?globalThis:window);

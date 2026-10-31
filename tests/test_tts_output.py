@@ -11,6 +11,47 @@ from tts_output import TTSOutput, redact_speech
 
 
 class TTSOutputTests(unittest.TestCase):
+    def test_browser_remembers_voice_and_never_silently_downgrades(self):
+        import threading
+        import banking_agent as ba
+        from test_domain_snapshots import SnapshotFixture
+        node, module = os.getenv('C7_NODE_BINARY'), os.getenv('C7_PLAYWRIGHT_MODULE')
+        if not node or not module:
+            self.skipTest('Browser QA requires C7_NODE_BINARY and C7_PLAYWRIGHT_MODULE')
+        fixture=SnapshotFixture();fixture.setUp()
+        script=r'''
+const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require('node:assert/strict');
+(async()=>{const b=await chromium.launch({headless:true});try{
+ const p=await b.newPage();const errors=[];p.on('pageerror',e=>errors.push(e.message));let available=true;const requests=[];
+ await p.addInitScript(()=>{window.localSpeechCalls=0;window.speechSynthesis.getVoices=()=>[{lang:'zh-CN',localService:true,name:'Local'}];window.speechSynthesis.speak=()=>window.localSpeechCalls++;});
+ await p.route('**/api/v1/voice/output-capabilities',r=>r.fulfill({json:{available}}));
+ await p.route('**/api/v1/voice/synthesize',r=>{requests.push(r.request().postDataJSON());return r.fulfill({status:503,json:{ok:false}})});
+ await p.goto(process.env.SPEECH_QA_URL);await p.locator('#settingsBtn').click();
+ await p.locator('#speechCloud').check();await p.locator('#speechVoice').selectOption('zh-CN-YunxiNeural');await p.locator('#speechRate').selectOption('0');
+ await p.locator('#speechEnabled').uncheck();await p.reload();await p.locator('#settingsBtn').click();
+ assert.equal(await p.locator('#speechCloud').isChecked(),true);assert.equal(await p.locator('#speechEnabled').isChecked(),false);
+ assert.equal(await p.locator('#speechVoice').inputValue(),'zh-CN-YunxiNeural');assert.equal(await p.locator('#speechRate').inputValue(),'0');
+ await p.locator('#speechPreview').click();await p.waitForFunction(()=>document.querySelector('#speechStatus').textContent.includes('暂不可用'));
+ assert.equal(requests.length,1);assert.equal(requests[0].voice,'zh-CN-YunxiNeural');assert.equal(requests[0].rate,0);assert.equal(requests[0].text,'看消费');
+ assert.equal(await p.evaluate(()=>window.localSpeechCalls),0);
+ available=false;await p.reload();await p.locator('#settingsBtn').click();await p.waitForFunction(()=>document.querySelector('#speechStatus').textContent.includes('保留您的选择'));
+ assert.equal(await p.locator('#speechCloud').isChecked(),true);assert.equal(await p.locator('#speechCloud').isEnabled(),true);
+ await p.locator('#speechCloud').uncheck();await p.reload();await p.locator('#settingsBtn').click();assert.equal(await p.locator('#speechCloud').isChecked(),false);
+ const blocked=await b.newPage();await blocked.addInitScript(()=>Object.defineProperty(window,'localStorage',{get(){throw Error('blocked')}}));
+ await blocked.goto(process.env.SPEECH_QA_URL);await blocked.locator('#settingsBtn').click();await blocked.locator('#speechCloud').check();
+ assert.match(await blocked.locator('#speechStatus').innerText(),/无法保存/);assert.deepEqual(errors,[]);
+}finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});
+'''
+        try:
+            with patch.object(ba,'runtime',fixture.rt),patch.object(ba,'gateway',ba.AgentGateway(fixture.rt)),patch.object(ba.http_rate_limiter,'allow',return_value=True):
+                with ba.ThreadingHTTPServer(('127.0.0.1',0),ba.Handler) as server:
+                    thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+                    try:
+                        run=subprocess.run([node,'-e',script],env=dict(os.environ,SPEECH_QA_URL=f'http://127.0.0.1:{server.server_port}'),capture_output=True,text=True,encoding='utf-8',timeout=90)
+                        self.assertEqual(run.returncode,0,run.stdout+run.stderr)
+                    finally:server.shutdown();thread.join(timeout=5)
+        finally:fixture.tearDown()
+
     def test_audio_policy_allows_only_local_blob_playback(self):
         import banking_agent as ba
         from io import BytesIO

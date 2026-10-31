@@ -1,5 +1,15 @@
 const assert=require('node:assert/strict');
-const {SpeechPlayer,safeText,chooseLocal,briefResponse}=require('../app/static/speech-output.js');
+const {SpeechPlayer,safeText,chooseLocal,briefResponse,loadPreferences,savePreferences}=require('../app/static/speech-output.js');
+const stored=new Map();const storage={getItem:k=>stored.get(k),setItem:(k,v)=>stored.set(k,v)};
+assert.equal(savePreferences(storage,{enabled:true,cloud:true,voice:'zh-CN-YunxiNeural',rate:0}),true);
+assert.deepEqual(loadPreferences(storage),{enabled:true,cloud:true,voice:'zh-CN-YunxiNeural',rate:0});
+savePreferences(storage,{enabled:false,cloud:false,voice:'zh-CN-XiaoxiaoNeural',rate:-8});
+assert.equal(loadPreferences(storage).cloud,false,'explicit local choice must survive reload');
+assert.equal(loadPreferences(storage).enabled,false);
+assert.deepEqual(loadPreferences({getItem:()=>'{bad'}),{enabled:true,cloud:false,voice:'zh-CN-XiaoxiaoNeural',rate:-8});
+assert.equal(loadPreferences({getItem:()=>JSON.stringify({cloud:'true',rate:99,voice:'unexpected'})}).cloud,false);
+assert.equal(loadPreferences({getItem(){throw Error('blocked')}}).rate,-8);
+assert.equal(savePreferences({setItem(){throw Error('blocked')}},{}),false);
 assert.equal(briefResponse({needs_auth:true,message:'大段验证解释'}),'请验证身份');
 assert.equal(briefResponse({result_view:{status:'SUCCESS',user_message:'当前可用余额为5000元，更多说明'}}),'已完成');
 assert.equal(briefResponse({result_view:{status:'UNKNOWN'}}),'结果待核实');
