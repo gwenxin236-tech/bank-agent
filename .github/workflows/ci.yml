@@ -64,7 +64,7 @@ jobs:
       - name: Existing approved browser tooling, fixed versions
         shell: bash
         env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/bank-browsers
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.qa-tools/browsers
         run: |
           set -euo pipefail
           python -m pip install Pillow==12.3.0
@@ -76,7 +76,7 @@ jobs:
         run: node --check app/static/app.js
       - name: Browser tests, zero skips
         env:
-          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/bank-browsers
+          PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.qa-tools/browsers
         run: python scripts/ci_verify.py --scope browser --output data/verification/ci/browser.json
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
