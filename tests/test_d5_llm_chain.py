@@ -136,7 +136,8 @@ class LLMChainTests(unittest.TestCase):
                     for valid in (True, False):
                         ModelHandler.valid = valid
                         run = subprocess.run([sys.executable, str(ROOT / 'scripts/verify_llm.py'),
-                            '--url', f'http://127.0.0.1:{server.server_port}'], capture_output=True, text=True, timeout=15)
+                            '--url', f'http://127.0.0.1:{server.server_port}'], capture_output=True, text=True, timeout=15,
+                            env=dict(os.environ, PYTHONIOENCODING='cp1252'))
                         self.assertEqual(run.returncode, 0 if valid else 2, run.stdout + run.stderr)
                         report = json.loads(run.stdout)
                         self.assertEqual(report['status'], 'PASS' if valid else 'FAIL')
