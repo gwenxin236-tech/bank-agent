@@ -1,5 +1,11 @@
 const assert=require('node:assert/strict');
-const {SpeechPlayer,safeText,chooseLocal}=require('../app/static/speech-output.js');
+const {SpeechPlayer,safeText,chooseLocal,briefResponse}=require('../app/static/speech-output.js');
+assert.equal(briefResponse({needs_auth:true,message:'大段验证解释'}),'请验证身份');
+assert.equal(briefResponse({result_view:{status:'SUCCESS',user_message:'当前可用余额为5000元，更多说明'}}),'已完成');
+assert.equal(briefResponse({result_view:{status:'UNKNOWN'}}),'结果待核实');
+assert.equal(briefResponse({result_view:{status:'PARTIAL'}}),'部分完成，请查看结果');
+assert.equal(briefResponse({plan_view:{requires_confirmation:true}}),'请确认办理');
+assert.equal(briefResponse({message:'很长的说明文字'}),'');
 const local={lang:'zh-CN',localService:true,name:'中文'};
 assert.equal(chooseLocal([{lang:'en-US',localService:true}, {...local,localService:false},local]),local);
 assert.ok(!safeText('卡号6222021234567890123，验证码123456，￥5,000.00元').match(/622202|123456|5,000/));
@@ -12,6 +18,21 @@ function setup(){
   return{env,history,revoked,statuses,requests,player:new SpeechPlayer(env)};
 }
 (async()=>{
+  // Execute the actual send handler: a shortcut speaks its label once, and its
+  // successful response must not replace it with a long banking explanation.
+  const vm=require('node:vm'),fs=require('node:fs');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../app/static/app.js'),'utf8');
+  const said=[],received=[],posted=[];
+  const context={busy:false,speechPlayer:{stop(){}},announceA11y:t=>said.push(t),addMessage(){},
+    $:()=>({value:'',textContent:''}),setBusy:v=>{context.busy=v;},ocrReviewToken:null,voiceSourceToken:null,
+    conversationId:'test',postAgent:async(path,body)=>{posted.push({path,body});return{ok:true,result_view:{status:'SUCCESS',user_message:'很长的消费说明'}};},
+    receiveAgentResponse:(...args)=>received.push(args),refreshState:async()=>{},showToast(){}};
+  vm.createContext(context);
+  vm.runInContext(source.slice(source.indexOf('async function send('),source.indexOf('async function confirmPlan(')),context);
+  await context.send('帮我看看最近的消费',{speechLabel:'看消费'});
+  assert.deepEqual(said,['看消费']);assert.equal(received[0][2],false);
+  assert.equal(posted.length,1);assert.equal(posted[0].body.message,'帮我看看最近的消费');
+  context.busy=true;await context.send('查余额',{speechLabel:'查余额'});assert.equal(said.length,1);
   const a=setup();await a.player.speak('核对金额5000元。',{cloud:true,voice:'zh-CN-XiaoxiaoNeural',rate:-8});
   assert.ok(!a.requests[0].body.includes('5000'));assert.equal(a.history.length,1);
   a.player.stop();assert.ok(a.history[0].paused);assert.deepEqual(a.revoked,['blob:demo']);

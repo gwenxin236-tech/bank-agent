@@ -1,7 +1,19 @@
 /* Playback only. Never calls a bank action endpoint. */
 (function (root) {
   'use strict';
-  const SAMPLE = '您好，我是澜小智。请核对本次办理内容，确认无误后，再继续办理。';
+  const SAMPLE = '看消费';
+  function briefResponse(data) {
+    if(data.blocked)return '已拦截，请核实';
+    if(data.needs_auth)return '请验证身份';
+    if(data.credential_id && data.ok)return '验证通过，请确认办理';
+    const result=data.result_view || data.presentation?.standard?.result_view;
+    if(result)return ({SUCCESS:'已完成',PROCESSING:'处理中',UNKNOWN:'结果待核实',
+      PARTIAL:'部分完成，请查看结果',FAILED:'未完成，请查看原因'})[result.status] || '请查看结果';
+    if(data.ok===false)return '未完成，请查看原因';
+    if(data.awaiting_details)return '请补充信息';
+    if((data.plan_view || data.presentation?.standard?.plan_view)?.requires_confirmation)return '请确认办理';
+    return '';
+  }
   function safeText(text) {
     return String(text || '').replace(/sk-[A-Za-z0-9_-]+/g,'密钥已隐藏')
       .replace(/(?:密码|口令|验证码|动态码)\s*[:：=]?\s*[A-Za-z0-9]{4,}/g,'验证信息已隐藏')
@@ -59,6 +71,6 @@
       }
     }
   }
-  root.BankSpeech={SpeechPlayer,safeText,normalize,chooseLocal,SAMPLE};
+  root.BankSpeech={SpeechPlayer,safeText,normalize,chooseLocal,briefResponse,SAMPLE};
   if(typeof module!=='undefined')module.exports=root.BankSpeech;
 })(typeof window==='undefined'?globalThis:window);

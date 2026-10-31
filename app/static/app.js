@@ -273,7 +273,7 @@ function renderCurrentDisplay() {
   if (view.plan_view) renderPlan(view.plan_view, view.result_view || null);
   renderFraudWarning();
 }
-function receiveAgentResponse(data, updatePlan=true) {
+function receiveAgentResponse(data, updatePlan=true, speak=true) {
   renderHandoffCard(data.handoff_card || data.presentation?.standard?.handoff_card || null);
   const standard = data.presentation?.standard || data;
   const plain = data.presentation?.plain || data;
@@ -289,8 +289,7 @@ function receiveAgentResponse(data, updatePlan=true) {
     $('#planPanel').innerHTML = '<div class="empty-state"><h3>这次没有办理</h3><p>请查看左侧说明，或点击“一键人工客服”。</p></div>';
   }
   renderFraudWarning();
-  const spokenView = elderMode ? plain : standard;
-  announceA11y(spokenView.result_view?.user_message || spokenView.message || spokenView.plan_view?.summary || '');
+  if (speak) announceA11y(BankSpeech.briefResponse(data));
   if (elderMode && currentDisplay.warning) $('#elderFraudAlert').focus();
   if (data.awaiting_details && data.transfer_draft) {
     transferDraft = data.transfer_draft;
@@ -472,9 +471,10 @@ $('#transferForm').addEventListener('submit',event=>{
   send(`给${recipient}转${amount}元${note ? '，备注' + note : ''}`);
 });
 
-async function send(msg, {openTransferForm = false, displayText = msg} = {}) {
+async function send(msg, {openTransferForm = false, displayText = msg, speechLabel = ''} = {}) {
   if (!msg || busy) return;
   speechPlayer.stop();
+  if (speechLabel) announceA11y(speechLabel);
   addMessage(displayText,'user'); $('#messageInput').value=''; setBusy(true);
   try {
     const ocrToken=ocrReviewToken;ocrReviewToken=null;
@@ -483,11 +483,11 @@ async function send(msg, {openTransferForm = false, displayText = msg} = {}) {
       ...(ocrToken ? {ocr_review_token:ocrToken} : {}),
       ...(voiceToken ? {voice_source_token:voiceToken,voice_reviewed:true} : {})});
     $('#traceLabel').textContent=d.trace_id?'本次服务已记录':'已拦截';
-    receiveAgentResponse(d);
+    receiveAgentResponse(d, true, !speechLabel || d.ok === false || d.blocked === true);
     if (openTransferForm && d.conversation_followup) await openTransferDialog(d.transfer_draft);
     if(d.blocked) showToast('这次没有办理，请查看说明');
     await refreshState();
-  } catch(e) { addMessage('现在连接不上银行小助手，请检查服务是否已启动。'); announceA11y('连接失败，请检查服务是否已启动。'); showToast('连接失败'); }
+  } catch(e) { addMessage('现在连接不上银行小助手，请检查服务是否已启动。'); announceA11y('连接失败'); showToast('连接失败'); }
   finally { setBusy(false); }
 }
 async function confirmPlan() {
@@ -497,7 +497,7 @@ async function confirmPlan() {
     receiveAgentResponse(d);
     if(d.needs_auth){if(d.auth_challenge?.method==='totp')$('#authDescription').textContent='为保障您的账户安全，请输入身份验证器中未使用的动态码。请勿向他人提供动态码。验证通过后，请核对办理内容并确认提交。'; $('#authModal').classList.remove('hidden'); $('#otpInput').focus(); return; }
     await refreshState();
-  } catch(e){ announceA11y('暂时无法确认办理结果，请先查看服务记录，不要重复转账。'); showToast('暂时无法确认办理结果，请先查看服务记录，不要重复转账'); } finally { setBusy(false); }
+  } catch(e){ announceA11y('结果待核实，请勿重复办理'); showToast('暂时无法确认办理结果，请先查看服务记录，不要重复转账'); } finally { setBusy(false); }
 }
 async function cancelPlan() {
   if(!currentPlan || busy) return; setBusy(true);
@@ -518,7 +518,7 @@ async function verify() {
     receiveAgentResponse(d);
     if(d.ok){ $('#authModal').classList.add('hidden'); $('#otpInput').value=''; showToast('身份验证已通过，请核对办理内容并确认提交'); }
     else if(d.breaker?.locked){ showToast('安全保护已锁定，请联系人工客服'); }
-  } catch(e) { announceA11y('暂时无法核对身份，请稍后重试或联系人工客服。'); showToast('暂时无法核对身份，请稍后重试或联系人工客服'); }
+  } catch(e) { announceA11y('暂时无法验证身份'); showToast('暂时无法核对身份，请稍后重试或联系人工客服'); }
   finally { btn.disabled=false; setBusy(false); }
 }
 async function refreshState(){
@@ -695,7 +695,7 @@ window.addEventListener('pagehide',cancelVoice);
 
 $('#composer').addEventListener('submit',e=>{e.preventDefault();send($('#messageInput').value.trim());});
 document.querySelectorAll('.quick').forEach(b=>b.addEventListener('click',()=>send(b.dataset.msg,
-  {openTransferForm:b.dataset.msg === '我要转账'})));
+  {openTransferForm:b.dataset.msg === '我要转账', speechLabel:b.querySelector('b').textContent.trim()})));
 $('#elderToggle').addEventListener('click',()=>{ elderMode=!elderMode; savePreference('elderMode',String(elderMode)); applyElderMode(); });
 $('#customerServiceBtn').addEventListener('click', requestCustomerService);
 $('#newSupportRequestBtn').addEventListener('click',()=>{
