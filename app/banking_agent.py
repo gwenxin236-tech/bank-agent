@@ -38,6 +38,7 @@ from llm_adapter import LLMConfig, LLMIntentAdapter
 from knowledge_service import KnowledgeService, KnowledgeScope, EmbeddingClient
 from ocr_service import OCRService, MAX_IMAGE_BYTES
 from speech_adapter import SpeechAdapter, MAX_AUDIO_BYTES, prepare_audio, VoiceEvidenceStore
+from tts_output import TTSOutput
 from channel_contracts import AgentGateway, UnifiedMessage
 from conversation_context import TransferDraftStore
 from security_controls import SlidingWindowRateLimiter
@@ -4266,7 +4267,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Permissions-Policy", "camera=(), geolocation=(), payment=()")
-        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; media-src 'self' blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
         for cookie in getattr(self,'_identity_response_cookies',[]):self.send_header('Set-Cookie',cookie)
         self._identity_response_cookies=[]
         self.end_headers()
@@ -4419,6 +4420,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "trace_id": trace_id, "count": len(events), "events": events})
         if path == "/":
             return self._send(200, (STATIC_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
+        if path == "/api/v1/voice/output-capabilities":
+            return self._send(200, TTSOutput().capabilities())
         if path.startswith("/static/"):
             target = (STATIC_DIR / path.removeprefix("/static/")).resolve()
             if STATIC_DIR.resolve() in target.parents and target.exists():
@@ -4558,6 +4561,12 @@ class Handler(BaseHTTPRequestHandler):
             action=path.rsplit('/', 1)[-1])
         if not family_identity['ok']:
             return self._send(403, family_identity)
+        if path == '/api/v1/voice/synthesize':
+            result = TTSOutput().synthesize(body.get('text'), consent=body.get('consent'),
+                voice=body.get('voice', 'zh-CN-XiaoxiaoNeural'), rate=body.get('rate', -8))
+            if result['ok']:
+                return self._send(200, result['audio'], 'audio/mpeg')
+            return self._send(400 if result['reason'] in ('invalid_request', 'consent_required') else 503, result)
         if path.startswith('/api/v1/support/'):
             action=path.rsplit('/',1)[-1]
             fields={'case_id','message_id','text'} if action=='send' else {'case_id','after_seq'} if action=='poll' else {'case_id','upto_seq'} if action=='ack' else set()

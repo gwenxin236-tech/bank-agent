@@ -77,24 +77,32 @@ function riskMeta(level, phase) {
   const label = labels[normalized];
   return {className: normalized, icon: icons[normalized], text: `${label} · ${phase}`, aria: `风险等级：${label}；状态：${phase}`};
 }
-function speechSafe(text) {
-  const raw = String(text ?? '');
-  if (!voicePrivacy) return raw;
-  return raw
-    .replace(/(?:¥\s*)?[\d,]+(?:\.\d{1,2})?\s*元?/g, '金额')
-    .replace(/\d{3}\*{4}\d{4}/g, '账号后四位')
-    .replace(/\b\d{8,19}\b/g, '账号')
-    .replace(/\b\d{6}\b/g, '验证码');
-}
+const speechPlayer = new BankSpeech.SpeechPlayer({
+  fetch: (...args)=>fetch(...args), Audio, URL, speechSynthesis:window.speechSynthesis,
+  Utterance:window.SpeechSynthesisUtterance, headers:()=>demoSessionHeaders,
+  status:text=>{ $('#speechStatus').textContent=text; }
+});
+function speechSafe(text) { return voicePrivacy ? BankSpeech.safeText(text) : String(text ?? ''); }
 function announceA11y(text, speak = true) {
   const spoken = speechSafe(text);
-  const node = $('#a11yStatus');
-  if (node) node.textContent = spoken;
-  if (speak && spoken && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined') {
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(spoken));
-  }
+  const node = $('#a11yStatus'); if(node)node.textContent=spoken;
+  if(speak && $('#speechEnabled').checked) speechPlayer.speak(spoken, {
+    cloud:$('#speechCloud').checked, privacy:voicePrivacy,
+    voice:$('#speechVoice').value, rate:Number($('#speechRate').value)
+  });
 }
+$('#speechPreview').addEventListener('click',()=>speechPlayer.speak(BankSpeech.SAMPLE, {
+  cloud:$('#speechCloud').checked, privacy:true, force:true,
+  voice:$('#speechVoice').value, rate:Number($('#speechRate').value)
+}));
+$('#speechStop').addEventListener('click',()=>{speechPlayer.stop();$('#speechStatus').textContent='已停止播报';});
+for(const id of ['speechEnabled','speechCloud','speechVoice','speechRate','settingsVoicePrivacy','voicePrivacyToggle'])
+  $('#'+id).addEventListener('change',()=>{speechPlayer.stop();$('#speechStatus').textContent='设置已更新，可点击试听。';});
+window.addEventListener('pagehide',()=>speechPlayer.stop());
+fetch('/api/v1/voice/output-capabilities').then(r=>r.json()).then(data=>{
+  $('#speechCloud').disabled=!data.available;
+  $('#speechStatus').textContent=data.available?'自然语音已就绪，启用联网语音后可试听。':'当前使用本机普通话；联网语音尚未启用。';
+}).catch(()=>{$('#speechCloud').disabled=true;$('#speechStatus').textContent='联网语音暂不可用，可使用本机普通话。';});
 function applyVoicePrivacy() {
   const toggle = $('#voicePrivacyToggle');
   if (!toggle) return;
@@ -162,7 +170,7 @@ function renderPlan(planView, resultView=null) {
     : !planView.requires_confirmation ? '暂未办理' : friendlyRisk(planView.risk_level);
   const risk = riskMeta(planView.risk_level, phaseLabel);
   panel.innerHTML=`<div class="plan-title"><span>${escapeHtml(elderMode?'这次要做的事':'本次操作计划')}</span><span class="risk ${risk.className}" role="status" aria-label="${escapeHtml(risk.aria)}"><span class="risk-icon" aria-hidden="true">${risk.icon}</span><span>${escapeHtml(risk.text)}</span></span></div><div class="plan-summary">${escapeHtml(planView.plain_summary || planView.summary || '')}</div><div class="risk-reason">${escapeHtml(planView.risk_reason || friendlyReason(planView.risk_level))}</div>${details?`<ul class="plan-details">${details}</ul>`:''}${elderMode?`<details class="technical-steps"><summary>查看办理步骤</summary><ol class="steps">${steps}</ol></details>`:`<ol class="steps">${steps}</ol>`}${planView.requires_confirmation&&!resultView?`<div class="confirmation-hint">${escapeHtml(planView.confirmation_hint||'请核对后再继续。')}</div>`:''}${actions}${planView.awaiting_details?'<button class="details-action" id="transferDetailsBtn">补充转账信息</button>':''}${resultHtml}`;
-  announceA11y(`${phaseLabel}。${planView.plain_summary || planView.summary || ''}`);
+  announceA11y(`${phaseLabel}。${resultView?.user_message || planView.plain_summary || planView.summary || ''}`, false);
   $('#transferDetailsBtn')?.addEventListener('click',()=>openTransferDialog(transferDraft));
   $('#confirmBtn')?.addEventListener('click',confirmPlan); $('#cancelBtn')?.addEventListener('click',cancelPlan);
   renderDomainGuidance(planView.domain_guidance, panel);
@@ -281,6 +289,8 @@ function receiveAgentResponse(data, updatePlan=true) {
     $('#planPanel').innerHTML = '<div class="empty-state"><h3>这次没有办理</h3><p>请查看左侧说明，或点击“一键人工客服”。</p></div>';
   }
   renderFraudWarning();
+  const spokenView = elderMode ? plain : standard;
+  announceA11y(spokenView.result_view?.user_message || spokenView.message || spokenView.plan_view?.summary || '');
   if (elderMode && currentDisplay.warning) $('#elderFraudAlert').focus();
   if (data.awaiting_details && data.transfer_draft) {
     transferDraft = data.transfer_draft;
@@ -464,6 +474,7 @@ $('#transferForm').addEventListener('submit',event=>{
 
 async function send(msg, {openTransferForm = false, displayText = msg} = {}) {
   if (!msg || busy) return;
+  speechPlayer.stop();
   addMessage(displayText,'user'); $('#messageInput').value=''; setBusy(true);
   try {
     const ocrToken=ocrReviewToken;ocrReviewToken=null;

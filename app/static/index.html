@@ -128,9 +128,19 @@
 
   <dialog id="settingsDialog" class="voice-dialog" aria-labelledby="settingsTitle" aria-describedby="settingsScope">
     <h2 id="settingsTitle">显示与帮助设置</h2>
-    <p id="settingsScope">以下为当前浏览器的显示偏好，不改变银行账户、交易权限或卡片状态。</p>
+    <p id="settingsScope">以下为本页显示与语音设置。银行业务仍需核对内容，并按提示确认。</p>
     <label class="voice-consent"><input id="settingsElderToggle" type="checkbox"/>长辈模式</label>
     <label class="voice-consent"><input id="settingsVoicePrivacy" type="checkbox"/>语音播报时隐藏金额和账号</label>
+    <h3>语音播报</h3>
+    <label class="voice-consent"><input id="speechEnabled" type="checkbox" checked/>自动播报办理提示</label>
+    <label class="voice-consent"><input id="speechCloud" type="checkbox"/>启用联网自然语音</label>
+    <p><small>联网语音将播报文字发送至 Microsoft 语音服务，金额、账号及验证码会隐藏。仅本次页面有效；关闭后使用本机普通话。</small></p>
+    <label for="speechVoice">普通话音色</label>
+    <select id="speechVoice"><option value="zh-CN-XiaoxiaoNeural">晓晓 · 自然女声</option><option value="zh-CN-YunxiNeural">云希 · 清晰男声</option></select>
+    <label for="speechRate">语速</label>
+    <select id="speechRate"><option value="-20">舒缓</option><option value="-8" selected>从容（推荐）</option><option value="0">标准</option><option value="10">稍快</option></select>
+    <div class="voice-actions"><button type="button" class="primary" id="speechPreview">试听当前音色</button><button type="button" class="ghost" id="speechStop">停止播报</button></div>
+    <p id="speechStatus" role="status" aria-live="polite">正在检查语音服务…</p>
     <h3>本页卡片列表</h3>
     <p>仅隐藏本列表中的卡片。不挂失、不注销、不删除账户；业务查询、转账核验和审计仍使用完整账户事实。</p>
     <label class="voice-consent"><input id="showHiddenCards" type="checkbox"/>查看已隐藏卡片并恢复显示</label>
@@ -179,10 +189,12 @@
   <div id="a11yStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
   <style>
+    #settingsDialog select{display:block;box-sizing:border-box;width:100%;min-height:56px;margin:8px 0 18px;padding:12px 14px;font:inherit;color:#163d32;background:#fff;border:1px solid #a7bdb3;border-radius:12px}#settingsDialog label[for^=speech]{display:block;margin-top:12px}
     #settingsDialog{box-sizing:border-box}#settingsDialog ul{padding-left:20px}#settingsDialog li{margin:12px 0;overflow-wrap:anywhere}#settingsDialog li button{display:block;max-width:100%;margin-top:8px;padding:10px;white-space:normal}.settings-links{flex-wrap:wrap;justify-content:flex-start}.settings-links button{max-width:100%;white-space:normal}#newSupportRequestBtn{padding:8px;white-space:normal}#settingsDialog .voice-consent{margin:12px 0}
     .handoff-card{margin:0 0 28px;padding:22px 24px;background:linear-gradient(135deg,#fff8ed,#fff);border:1px solid #f0d7a7;border-radius:18px;box-shadow:0 10px 30px rgba(133,91,25,.08)}
     .handoff-card.hidden{display:none}.handoff-card-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.handoff-card h2{margin:2px 0 0;font-size:20px}.handoff-badge{padding:6px 10px;border-radius:999px;background:#fff0d2;color:#8b5d18;font-size:12px;font-weight:700}.handoff-note{margin:10px 0 16px;color:#735f43;font-size:13px;line-height:1.7}.handoff-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.handoff-block{padding:13px 15px;background:#fff;border:1px solid #f0e5d2;border-radius:12px}.handoff-block h3{margin:0 0 8px;font-size:13px;color:#765521}.handoff-block p,.handoff-block li{font-size:13px;line-height:1.65;margin:0;color:#38443d}.handoff-block ul{padding-left:18px;margin:0}.handoff-block small{display:block;color:#849089;margin-top:6px}@media(max-width:720px){.handoff-grid{grid-template-columns:1fr}}
   </style>
+  <script src="/static/speech-output.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
