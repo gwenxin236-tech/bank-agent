@@ -47,6 +47,24 @@ try {
   hiddenCards = new Set(saved);
 } catch (_) { cardPreferenceNotice = '本地显示偏好损坏，已按全部显示处理。'; }
 const log = $('#chatLog');
+let amountsHidden = readPreference('bankAgent:hideAmounts') === 'true';
+let accountSnapshot = null;
+function renderAccountAmounts() {
+  const d = accountSnapshot;
+  $('#balanceValue').textContent = amountsHidden ? '••••••' : d ? money(d.balance?.available_cents) : '读取中…';
+  $('#balancePrivacy').textContent = amountsHidden ? '显示' : '隐藏';
+  $('#balancePrivacy').setAttribute('aria-label', amountsHidden ? '显示账户金额' : '隐藏账户金额');
+  $('#balancePrivacy').setAttribute('aria-pressed', String(amountsHidden));
+  const daily=d && d.daily_transfer_cents, limit=d && d.daily_transfer_limit_cents;
+  const valid=Number.isSafeInteger(daily)&&Number.isSafeInteger(limit)&&limit>0;
+  $('#limitValue').textContent = amountsHidden ? '••••••' : valid ? money(Math.max(0,limit-daily)) : '—';
+  $('#limitHint').textContent = amountsHidden ? '账户金额已隐藏' : valid ? `今天已用 ${money(daily)} / ${money(limit)}` : '额度暂不可用';
+  $('#limitProgress').style.width = !amountsHidden&&valid ? `${Math.min(100,daily*100/limit)}%` : '0%';
+}
+$('#balancePrivacy').addEventListener('click',()=>{
+  amountsHidden=!amountsHidden;savePreference('bankAgent:hideAmounts',String(amountsHidden));renderAccountAmounts();
+});
+renderAccountAmounts();
 
 // Move the live controls into a native modal: no cloned plans or duplicate actions.
 const focusDialog = $('#focusDialog');
@@ -120,6 +138,7 @@ function applyElderMode() {
   renderFraudWarning();
 }
 function addMessage(text, who='bot', plainText=null) {
+  document.body.classList.add('has-conversation');
   const row = document.createElement('div');
   row.className = `message ${who}`;
   row.innerHTML = `<div class="avatar">${who === 'bot' ? 'L' : '你'}</div><div><div class="bubble"></div><div class="time">刚刚</div></div>`;
@@ -215,12 +234,15 @@ function renderCardDisplay() {
 function updateSupportControls() {
   $('#newSupportRequestBtn').disabled = supportBusy || supportCaseStatus !== 'LOCAL_CLOSED';
 }
+let settingsOrigin = null;
 function openSettings() {
+  settingsOrigin = document.activeElement;
   $('#settingsElderToggle').checked = elderMode;
   $('#settingsVoicePrivacy').checked = voicePrivacy;
   renderCardDisplay(); $('#settingsDialog').showModal();
 }
-function closeSettings() { $('#settingsDialog').close(); $('#settingsBtn').focus(); }
+function restoreSettingsFocus() { (settingsOrigin?.isConnected ? settingsOrigin : $('#settingsBtn')).focus(); }
+function closeSettings() { $('#settingsDialog').close(); restoreSettingsFocus(); }
 window.__a11yAnnounce = announceA11y;
 function friendlyRisk(level, protective=false) { return protective ? '已拦截保护' : ({green:'可以直接办理',yellow:'请你确认后办理',red:'需要再次验证'}[level] || '请你确认后办理'); }
 function friendlyReason(level) { return ({green:'这是查询，不会改变账户里的钱。',yellow:'这是会改变账户状态的操作，先请你核对清楚。',red:'这是更重要的操作，除了核对，还需要再验证一次。'}[level] || '请你核对清楚后再继续。'); }
@@ -613,19 +635,12 @@ async function refreshState(){
   try {
     const response = await fetch('/api/state', {headers:demoSessionHeaders});
     const d = await response.json();
-    if (!response.ok || !d.ok) { displayCards = null; renderCardDisplay(); return; }
+    if (!response.ok || !d.ok) { displayCards = null; accountSnapshot={}; renderAccountAmounts(); renderCardDisplay(); return; }
     displayCards = Array.isArray(d.cards?.items) ? d.cards.items : null;
     renderCardDisplay();
-    $('#balanceValue').textContent = money((d.balance||{}).available_cents);
-    const daily = d.daily_transfer_cents;
-    const limit = d.daily_transfer_limit_cents;
-    if (Number.isSafeInteger(daily) && Number.isSafeInteger(limit) && limit > 0) {
-      $('#limitValue').textContent = money(Math.max(0, limit-daily));
-      $('#limitProgress').style.width = `${Math.min(100, daily*100/limit)}%`;
-      $('#limitHint').textContent = `今天已用 ${money(daily)} / ${money(limit)}`;
-    }
+    accountSnapshot=d;renderAccountAmounts();
     $('#demoOtpHint').textContent = d.auth_method==='totp' ? '请使用身份验证器中下一枚未使用的动态码。' : d.demo_otp ? `演示验证码：${d.demo_otp}` : '请向演示管理员获取验证码';
-  } catch(e){ displayCards = null; renderCardDisplay(); }
+  } catch(e){ displayCards = null; accountSnapshot={}; renderAccountAmounts(); renderCardDisplay(); }
 }
 async function loadCapabilities(){ try{ const d=await (await fetch('/api/capabilities')).json(); const c=d.capabilities||{}; $('#modelMode').textContent=c.llm_enabled?'已接入可选模型':'离线规则模式'; $('#modeDetail').textContent=c.llm_enabled?`已启用 ${c.model_mode}，模型只帮助理解你的话`:'不需要 API Key 也可以完成演示'; }catch(e){} }
 
@@ -785,6 +800,7 @@ $('#composer').addEventListener('submit',e=>{e.preventDefault();send($('#message
 document.querySelectorAll('.quick').forEach(b=>b.addEventListener('click',()=>{
   if (busy) return;
   openFocus(b);
+  if (!focusDialog.open) $('#assistant').scrollIntoView({block:'start'});
   send(b.dataset.msg, {openTransferForm:b.dataset.msg === '我要转账', speechLabel:b.querySelector('b').textContent.trim()});
 }));
 $('#elderToggle').addEventListener('click',()=>{ elderMode=!elderMode; savePreference('elderMode',String(elderMode)); applyElderMode(); });
@@ -802,8 +818,9 @@ $('#newSupportRequestBtn').addEventListener('click',()=>{
   updateSupportControls(); requestCustomerService();
 });
 $('#settingsBtn').addEventListener('click',openSettings);
+$('#mobileSettings').addEventListener('click',openSettings);
 $('#settingsClose').addEventListener('click',closeSettings);
-$('#settingsDialog').addEventListener('cancel',()=>$('#settingsBtn').focus());
+$('#settingsDialog').addEventListener('cancel',restoreSettingsFocus);
 $('#showHiddenCards').addEventListener('change',renderCardDisplay);
 $('#settingsElderToggle').addEventListener('change',e=>{elderMode=e.target.checked;savePreference('elderMode',String(elderMode));applyElderMode();});
 $('#settingsVoicePrivacy').addEventListener('change',e=>{voicePrivacy=e.target.checked;savePreference('voicePrivacy',String(voicePrivacy));applyVoicePrivacy();});

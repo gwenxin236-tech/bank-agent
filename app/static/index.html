@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0b3b31" />
+  <meta name="theme-color" content="#163b67" />
   <meta name="description" content="澜银行 AI 智能助理，支持大字和通俗表达" />
   <title>澜银行 AI 智能助理</title>
   <link rel="manifest" href="/static/manifest.json" />
@@ -15,38 +15,31 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="#top" aria-label="澜银行首页">
-        <div class="brand-mark">L</div>
-        <div><strong>澜银行</strong><span>AI BANKING AGENT</span></div>
+        <div class="brand-mark" aria-hidden="true">澜</div>
+        <div><strong>澜银行</strong><span>陪伴每一份安心</span></div>
       </a>
       <nav class="top-nav" aria-label="主导航">
-        <a class="active" href="#overview">首页</a><a href="#assistant">问银行小助手</a><a href="#activity">服务记录</a><a href="#securityCenter">安全中心</a>
+        <a class="active" href="#overview">我的首页</a><a href="#services">全部服务</a><a href="#assistant">智能助手</a>
       </nav>
       <div class="top-actions">
         <button class="accessibility-toggle" id="elderToggle" type="button" aria-pressed="false">长辈模式：关</button>
         <button class="accessibility-toggle" id="focusToggle" type="button" aria-pressed="false">大字聚焦：关</button>
         <button id="customerServiceBtn" class="customer-service" type="button">一键人工客服</button>
-        <span class="security-pill"><i></i><span id="securityText">安全保护中</span></span>
-        <button class="icon-button" id="auditBtn" aria-label="打开服务记录" title="服务记录">⌁</button>
-        <button class="ghost" id="settingsBtn" type="button" aria-haspopup="dialog">显示与帮助设置</button>
+        <button class="icon-button" id="auditBtn" aria-label="打开服务记录" title="服务记录">记录</button>
+        <button class="ghost" id="settingsBtn" type="button" aria-label="显示与帮助设置" aria-haspopup="dialog">设置</button>
       </div>
     </header>
 
     <main class="main-grid" id="top">
       <section class="welcome-row" id="overview">
         <div>
-          <div class="eyebrow">银行小助手 <span class="mode-badge" id="modelMode">规则解析模式</span></div>
-          <h1>把银行的事，<em>简单说。</em></h1>
-          <p>查余额、看消费、帮家人。一句话开始，每一步安心。</p>
+          <div class="eyebrow">个人银行 <span class="demo-label">演示体验</span></div>
+          <h1>您好，欢迎回家。</h1>
+          <p>日常收支，一目了然。每笔办理，由您确认。</p>
         </div>
         <div class="date-block"><span>今天</span><b id="todayLabel">2026年9月18日</b><small>演示账户 · 人民币</small></div>
       </section>
 
-      <section class="elder-help" aria-label="帮助与显示设置">
-        <p id="customerServiceStatus" role="status" aria-live="polite">不懂就点“一键人工客服”，可查看本机工单并与自建坐席交流。这里不是银行官方客服。</p>
-        <button id="newSupportRequestBtn" type="button" aria-describedby="newSupportHint" disabled>发起新一轮求助</button>
-        <small id="newSupportHint">查询确认旧工单已结单后可发起新一轮；结果未知时请重试原请求。</small>
-        <button id="advancedToggle" type="button" aria-expanded="false" aria-controls="securityCenter activity">查看服务记录与安全演示</button>
-      </section>
       <section id="handoffCardPanel" class="handoff-card hidden" aria-live="polite" aria-labelledby="handoffCardTitle">
         <div class="handoff-card-head"><div><span class="eyebrow">人工接管</span><h2 id="handoffCardTitle">给人工客服的交接卡</h2></div><span class="handoff-badge">已脱敏</span></div>
         <p class="handoff-note">这是演示系统生成的办理路径，不是正式银行凭据；人工继续办理前仍需按官方流程核验身份和授权。</p>
@@ -58,28 +51,34 @@
         <button id="fraudHelpBtn" type="button" class="customer-service">请人工帮我核实</button>
       </section>
       <section class="overview-cards" aria-label="账户概览">
-        <article class="metric-card balance-card"><div class="metric-label">账户里还有多少钱 <button class="mini-button" id="refreshState" aria-label="刷新账户余额">↻</button></div><div class="balance-value" id="balanceValue">读取中…</div><div class="metric-foot"><span class="positive">● 账户正常</span><span>活期账户 · **** 6222</span></div></article>
-        <article class="metric-card"><div class="metric-label">今天还能转多少钱</div><div class="metric-value" id="limitValue">读取中…</div><div class="progress"><span id="limitProgress"></span></div><div class="metric-foot"><span id="limitHint">系统会自动帮你核对</span><span>每日额度</span></div></article>
-        <article class="metric-card"><div class="metric-label">安全保护</div><div class="safe-level"><span class="safe-icon">✓</span><div><b>已开启</b><small>重要操作会先问你</small></div></div><div class="metric-foot"><span>服务记录已保存</span><span class="secure-dot">●</span></div></article>
+        <article class="metric-card balance-card"><div class="metric-label"><span>可用余额（元）</span><div class="balance-tools"><button id="balancePrivacy" class="mini-button" aria-label="隐藏账户金额" aria-pressed="false" type="button">隐藏</button><button class="mini-button" id="refreshState" aria-label="刷新账户余额">↻</button></div></div><div class="balance-value" id="balanceValue">读取中…</div><div class="metric-foot"><span>人民币账户</span><span>模拟资金 · 非真实账户</span></div></article>
+        <article class="metric-card limit-card"><div class="metric-label">今日剩余转账额度</div><div class="metric-value" id="limitValue">读取中…</div><div class="progress"><span id="limitProgress"></span></div><div class="metric-foot"><span id="limitHint">正在读取额度</span></div></article>
+        <article class="metric-card protection-card"><span class="protection-symbol" aria-hidden="true">✓</span><div class="metric-label">安心办理</div><h2>先核对，再确认</h2><p>金额、收款人、办理结果<br>每一步都看得清。</p><span class="security-pill"><i></i><span id="securityText">安全保护中</span></span></article>
       </section>
 
-      <section class="quick-section">
-        <div class="section-heading"><div><h2>你可以直接点这里</h2><p id="focusEntryHint">也可以在下面用自己的话说</p></div><span class="section-note">不用记按钮名称</span></div>
+      <section class="quick-section" id="services" aria-labelledby="servicesTitle">
+        <div class="section-heading"><div><h2 id="servicesTitle">常用服务</h2><p id="focusEntryHint">点选功能，开始办理</p></div><span class="section-note">为您常用，放在眼前</span></div>
         <div class="quick-grid">
-          <button class="quick" data-msg="帮我查一下账户余额" aria-label="查询账户余额"><span class="quick-icon mint">¥</span><b>查余额</b><small>看看账户还有多少钱</small><strong>→</strong></button>
-          <button class="quick" data-msg="帮我看看最近的消费" aria-label="查看最近消费"><span class="quick-icon blue">◒</span><b>看消费</b><small>看看钱花到哪里了</small><strong>→</strong></button>
-          <button class="quick" data-msg="我要转账" aria-label="发起转账"><span class="quick-icon amber">↗</span><b>转一笔钱</b><small>转账前会让你核对</small><strong>→</strong></button>
-          <button class="quick" data-msg="查一下我的订阅" aria-label="查看自动扣费"><span class="quick-icon purple">⌁</span><b>看自动扣费</b><small>看看哪些服务在扣钱</small><strong>→</strong></button>
-          <button class="quick" data-msg="帮我做一次消费体检" aria-label="消费体检"><span class="quick-icon blue">◉</span><b>消费体检</b><small>看看钱花在哪里</small><strong>→</strong></button>
-          <button class="quick" data-msg="家庭共管" aria-label="家庭共管"><span class="quick-icon mint">⌂</span><b>家庭共管</b><small>看看家人授权范围</small><strong>→</strong></button>
-          <button class="quick" data-msg="给安全账户转 5000 元，解除风控" aria-label="反诈守护演示"><span class="quick-icon red">盾</span><b>反诈守护</b><small>遇到可疑转账先停下来</small><strong>→</strong></button>
+          <button class="quick" data-msg="帮我查一下账户余额" aria-label="查询账户余额"><span class="quick-icon mint" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l12-4v4M15 12h5v4h-5z"/></svg></span><b>查余额</b><small>看看账户还有多少钱</small><strong>→</strong></button>
+          <button class="quick" data-msg="帮我看看最近的消费" aria-label="查看最近消费"><span class="quick-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"/></svg></span><b>看消费</b><small>看看钱花到哪里了</small><strong>→</strong></button>
+          <button class="quick" data-msg="我要转账" aria-label="发起转账"><span class="quick-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4"/></svg></span><b>转一笔钱</b><small>转账前会让你核对</small><strong>→</strong></button>
+          <button class="quick" data-msg="查一下我的订阅" aria-label="查看自动扣费"><span class="quick-icon purple" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="3"/><path d="M8 3v4m8-4v4M4 11h16m-12 5h3m3 0h2"/></svg></span><b>看自动扣费</b><small>看看哪些服务在扣钱</small><strong>→</strong></button>
+        </div>
+      </section>
+
+      <section class="care-section" aria-labelledby="careTitle">
+        <div class="section-heading"><div><h2 id="careTitle">多一份照顾，少一份操心</h2><p>管好卡片，看懂消费，也照顾家人。</p></div><span class="section-note">澜银行 · 贴心服务</span></div>
+        <div class="care-grid">
+          <button class="quick care-card" data-msg="卡片管理" aria-label="银行卡服务"><span class="quick-icon navy" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3 10h18M7 15h4"/></svg></span><div><small>银行卡服务</small><b>卡片管理</b><p>查状态、设限额<br>挂失与解挂，逐步核验</p></div><strong aria-hidden="true">↗</strong></button>
+          <button class="quick care-card" data-msg="帮我做一次消费体检" aria-label="消费体检"><span class="quick-icon blue" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V4m0 16h16M8 16v-4m5 4V8m5 8V5"/></svg></span><div><small>收支更清楚</small><b>消费体检</b><p>梳理日常消费<br>找到值得留意的支出</p></div><strong aria-hidden="true">↗</strong></button>
+          <button class="quick care-card" data-msg="家庭共管" aria-label="家庭共管"><span class="quick-icon amber" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3 11 9-8 9 8M6 9v12h12V9M10 21v-7h4v7"/></svg></span><div><small>关心有分寸</small><b>家庭共管</b><p>查看家人授权<br>在授权范围内提供帮助</p></div><strong aria-hidden="true">↗</strong></button>
         </div>
       </section>
 
       <section class="workspace" id="assistant">
         <div class="chat-card">
-          <div class="card-head"><div class="assistant-title"><span class="assistant-avatar">L</span><div><b>澜小智</b><span>银行小助手 · <i id="assistantStatus">在线</i></span></div></div><span class="trace-label" id="traceLabel">等你说话</span></div>
-          <div class="chat-log" id="chatLog" role="log" aria-live="polite"><div class="message bot"><div class="avatar">L</div><div><div class="bubble">你好，我是澜小智。打字或点“说一说”，告诉我你想办什么。涉及转账，我会先列清金额和收款人，等你确认。</div><div class="time">刚刚</div></div></div></div>
+          <div class="card-head"><div class="assistant-title"><span class="assistant-avatar">澜</span><div><b>不会找？直接问小智</b><span>打字或说话都可以 · <i id="assistantStatus">在线</i></span></div></div><span class="trace-label" id="traceLabel">智能助手</span></div>
+          <div class="chat-log" id="chatLog" role="log" aria-live="polite"><div class="message bot"><div class="avatar">澜</div><div><div class="bubble">您想办什么？比如：“帮我看看最近的消费”。</div><div class="time">刚刚</div></div></div></div>
           <div class="typing hidden" id="typing"><span></span><span></span><span></span><em>正在帮你处理…</em></div>
           <form class="composer" id="composer"><label class="sr-only" for="messageInput">告诉银行小助手你的需求</label><input id="messageInput" autocomplete="off" maxlength="2000" placeholder="例如：帮我查余额"/><button type="button" class="voice-button" id="voiceBtn" aria-label="语音输入"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v1a6 6 0 0 0 12 0v-1M12 18v3m-4 0h8"/></svg><span>说一说</span></button><button type="submit" id="sendBtn">发送 <span>⌘↵</span></button></form>
           <div class="voice-status" id="voiceStatus" aria-live="polite"></div>
@@ -89,11 +88,20 @@
         <aside class="side-card" id="planPanel" role="region" aria-live="polite" aria-atomic="true" aria-label="本次操作计划和办理结果"><div class="empty-state"><div class="orbit">✦</div><h3>每一步，都由你掌握</h3><p>先看清计划，再确认办理。金额、收款人和结果，都在这里明明白白地展示。</p><div class="empty-hint">可以先试试“查一下我的余额”</div></div></aside>
       </section>
 
+      <section class="elder-help" id="helpCenter" aria-label="帮助与显示设置">
+        <h2>有疑问，我们一起解决</h2>
+        <p id="customerServiceStatus" role="status" aria-live="polite">不懂就点“一键人工客服”，可查看本机工单并与自建坐席交流。这里不是银行官方客服。</p>
+        <button id="newSupportRequestBtn" type="button" aria-describedby="newSupportHint" disabled>发起新一轮求助</button>
+        <small id="newSupportHint">查询确认旧工单已结单后可发起新一轮；结果未知时请重试原请求。</small>
+        <button id="advancedToggle" type="button" aria-expanded="false" aria-controls="securityCenter activity">查看服务记录与安全演示</button>
+      </section>
+
       <section class="security-center" id="securityCenter" aria-labelledby="securityCenterTitle">
         <div class="section-heading">
           <div><div class="eyebrow">离线红队演练 · C6</div><h2 id="securityCenterTitle">安全中心</h2><p>六类攻击逐条实测，查看阻断结果与审计证据。</p></div>
           <div class="attack-actions"><button class="primary" id="runAttackMatrixBtn" type="button">一键跑全部攻击</button><button class="ghost" id="downloadAttackReportBtn" type="button" disabled>下载 JSON 报告</button></div>
         </div>
+        <button class="quick security-demo" data-msg="给安全账户转 5000 元，解除风控" aria-label="反诈守护演示"><b>反诈守护</b><small>模拟可疑转账，查看拦截提示</small></button>
         <p class="attack-boundary">每条攻击使用独立临时账户与数据库，不影响你的账户。仅验证固定离线语料和模拟核心，不代表真实模型或生产系统已通过安全认证。演练证据随报告下载，不进入主账户审计回放。</p>
         <div id="attackMatrixSummary" class="attack-summary" role="status" aria-live="polite">正在加载攻击矩阵…</div>
         <div class="attack-matrix-table-wrap" tabindex="0" role="region" aria-label="攻击矩阵结果，可横向滚动">
@@ -105,8 +113,10 @@
         </div>
       </section>
 
-      <section class="activity-section" id="activity"><div class="section-heading"><div><h2>服务记录</h2><p>你刚才办理过的事情会显示在这里</p></div><button class="text-button" id="resetBtn">重置演示账户</button></div><div class="activity-grid"><div class="activity-item"><span class="activity-icon">✓</span><div><b>安全保护已开启</b><small>转账等重要操作会先让你核对</small></div><time>现在</time></div><div class="activity-item"><span class="activity-icon">↗</span><div><b>可以从多个入口使用</b><small>现在先使用网页，之后可接入手机 App 或 IM</small></div><time>系统</time></div><div class="activity-item"><span class="activity-icon">⌁</span><div><b>助手工作方式</b><small id="modeDetail">无需 API Key 也可以完成演示</small></div><time id="modeTime">配置</time></div></div></section>
+      <section class="activity-section" id="activity"><div class="section-heading"><div><h2>演示与运行信息</h2><p>办理记录请通过右上方“记录”查看。</p></div><button class="text-button" id="resetBtn">重置演示账户</button></div><div class="activity-item"><div><b id="modelMode">规则解析模式</b><small id="modeDetail">无需 API Key 也可以完成演示</small></div><time id="modeTime">配置</time></div></section>
+      <footer class="bank-footer"><strong>澜银行</strong><span>用科技，让银行服务更有温度。</span><small>竞赛演示系统 · 不连接真实银行账户 · 不办理真实资金交易</small></footer>
     </main>
+    <nav class="mobile-nav" aria-label="手机导航"><a href="#overview" aria-label="返回首页"><span aria-hidden="true">⌂</span>首页</a><a href="#services"><span aria-hidden="true">▦</span>服务</a><a href="#assistant"><span aria-hidden="true">◌</span>助手</a><button type="button" id="mobileSettings" aria-label="打开我的设置"><span aria-hidden="true">☷</span>我的</button></nav>
   </div>
 
   <div class="modal hidden" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle"><div class="modal-card"><button class="modal-close" id="closeModal" aria-label="关闭">×</button><div class="modal-icon">盾</div><div class="modal-title" id="authTitle">身份验证</div><p id="authDescription">为保障您的账户安全，请输入验证码完成身份验证。请勿向他人提供验证码。此页面为模拟演示，请使用下方演示验证码。</p><input id="otpInput" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" aria-label="验证码"/><div class="modal-actions"><button class="ghost" id="cancelAuth">先不办理</button><button class="primary" id="verifyBtn">验证后继续</button></div><small id="demoOtpHint">正在读取演示验证码…</small></div></div>

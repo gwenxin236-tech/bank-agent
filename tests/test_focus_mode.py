@@ -10,6 +10,61 @@ from test_domain_snapshots import SnapshotFixture
 
 
 class FocusModeTests(SnapshotFixture, unittest.TestCase):
+    def test_bank_home_navigation_privacy_and_service_access(self):
+        node, module = os.getenv('C7_NODE_BINARY'), os.getenv('C7_PLAYWRIGHT_MODULE')
+        if not node or not module:
+            self.skipTest('Browser QA requires C7_NODE_BINARY and C7_PLAYWRIGHT_MODULE')
+        self.run_browser(r'''
+const assert=require('node:assert/strict');
+const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);
+(async()=>{
+ const browser=await chromium.launch({headless:true});
+ try {
+ const page=await browser.newPage({viewport:{width:1440,height:1000}});
+ const posts=[],errors=[];
+ page.on('request',r=>{if(r.method()==='POST')posts.push(r.url());});
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(process.env.FOCUS_TEST_URL);
+ await page.waitForFunction(()=>document.querySelector('#balanceValue').textContent.includes('¥'));
+ const amount=await page.locator('#balanceValue').innerText();
+ await page.getByRole('button',{name:'隐藏账户金额',exact:true}).click();
+ assert.equal(await page.locator('#balanceValue').innerText(),'••••••');
+ await page.locator('#refreshState').click();
+ await page.waitForLoadState('networkidle');
+ assert.equal(await page.locator('#balanceValue').innerText(),'••••••');
+ await page.reload();
+ assert.equal(await page.locator('#balanceValue').innerText(),'••••••');
+ await page.getByRole('button',{name:'显示账户金额',exact:true}).click();
+ assert.equal(await page.locator('#balanceValue').innerText(),amount);
+ assert.equal(posts.length,0,'navigation and privacy must never issue banking actions');
+ assert.equal(await page.locator('#securityCenter').isVisible(),false);
+ assert.equal(await page.getByRole('button',{name:'家庭共管',exact:true}).isVisible(),true);
+ assert.equal(await page.getByRole('button',{name:'消费体检',exact:true}).isVisible(),true);
+ const services=await page.locator('#services').boundingBox();
+ const assistant=await page.locator('#assistant').boundingBox();
+ assert.ok(services.y<assistant.y,'services precede the assistant');
+ if(process.env.BANK_DESIGN_SHOTS)await page.screenshot({path:process.env.BANK_DESIGN_SHOTS+'/desktop.png',fullPage:true});
+ await page.setViewportSize({width:390,height:844});
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.ok(await page.locator('.topbar').evaluate(e=>e.getBoundingClientRect().height<170),'mobile header keeps service access in reach');
+ await page.getByRole('link',{name:'返回首页',exact:true}).click();
+ if(process.env.BANK_DESIGN_SHOTS)await page.screenshot({path:process.env.BANK_DESIGN_SHOTS+'/mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'打开我的设置',exact:true}).click();
+ await page.locator('#settingsDialog').waitFor({state:'visible'});
+ await page.locator('#settingsClose').click();
+ assert.equal(await page.locator('#mobileSettings').evaluate(e=>e===document.activeElement),true);
+ await page.getByRole('button',{name:'银行卡服务',exact:true}).click();
+ await page.locator('#focusDialog').waitFor({state:'visible'});
+ await page.waitForFunction(()=>!document.querySelector('#sendBtn').disabled);
+ assert.match(await page.locator('#planPanel').innerText(),/卡/);
+ assert.equal(await page.locator('#confirmBtn').count(),0,'opening card services does not authorize a card operation');
+ await page.locator('#focusClose').click();
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ assert.deepEqual(errors,[]);
+ } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});
+''', node)
+
     def test_browser_focus_exit_mobile_and_auth(self):
         node, module = os.getenv('C7_NODE_BINARY'), os.getenv('C7_PLAYWRIGHT_MODULE')
         if not node or not module:

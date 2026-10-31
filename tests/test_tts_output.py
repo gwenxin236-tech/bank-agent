@@ -54,7 +54,7 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
  let count=0;
  for(const voice of ['zh-CN-XiaoxiaoNeural','zh-CN-YunxiNeural']){
    if(count){await p.locator('#settingsBtn').click();await p.locator('#speechVoice').selectOption(voice);await p.locator('#settingsClose').click();}
-   for(const name of ['查询账户余额','发起转账']){
+   for(const name of ['查询账户余额','发起转账','银行卡服务']){
      await p.getByRole('button',{name,exact:true}).click();count++;
      await p.waitForFunction(n=>window.starts.length===n,count);
      await p.waitForFunction(()=>!document.querySelector('#sendBtn').disabled);
@@ -73,7 +73,7 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
      rows.push({voice,text,duration:decoded.duration,leading_ms:first*1000/decoded.sampleRate});
    }}finally{await ctx.close();}return rows;
  });
- assert.equal(clips.length,42);assert.ok(clips.every(x=>x.duration>.25 && x.duration<8 && x.leading_ms>=0 && x.leading_ms<350));
+ assert.equal(clips.length,44);assert.ok(clips.every(x=>x.duration>.25 && x.duration<8 && x.leading_ms>=0 && x.leading_ms<350));
  assert.deepEqual(errors,[]);console.log(JSON.stringify({starts:starts.map(x=>Math.round(x.ms)),synthesis_requests:synth,max_leading_ms:Math.max(...clips.map(x=>x.leading_ms)),clips:clips.length}));
 }finally{await b.close()}})().catch(e=>{console.error(e);process.exit(1)});
 '''
