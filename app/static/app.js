@@ -484,7 +484,7 @@ async function confirmPlan() {
   try {
     const d=await postAgent('/api/confirm', {plan_id:currentPlan.plan_id,action_token:currentPlan.action_token});
     receiveAgentResponse(d);
-    if(d.needs_auth){if(d.auth_challenge?.method==='totp')$('#authDescription').textContent='请核对操作内容，再输入身份验证器中下一枚未使用的动态码。登录时的动态码不能重用；通过后仍须再次确认。'; $('#authModal').classList.remove('hidden'); $('#otpInput').focus(); return; }
+    if(d.needs_auth){if(d.auth_challenge?.method==='totp')$('#authDescription').textContent='为保障您的账户安全，请输入身份验证器中未使用的动态码。请勿向他人提供动态码。验证通过后，请核对办理内容并确认提交。'; $('#authModal').classList.remove('hidden'); $('#otpInput').focus(); return; }
     await refreshState();
   } catch(e){ announceA11y('暂时无法确认办理结果，请先查看服务记录，不要重复转账。'); showToast('暂时无法确认办理结果，请先查看服务记录，不要重复转账'); } finally { setBusy(false); }
 }
@@ -505,7 +505,7 @@ async function verify() {
   try {
     const d=await postAgent('/api/verify', {plan_id:currentPlan.plan_id,action_token:currentPlan.action_token,code:$('#otpInput').value});
     receiveAgentResponse(d);
-    if(d.ok){ $('#authModal').classList.add('hidden'); $('#otpInput').value=''; showToast('身份核对通过，请核对金额和收款人后再次确认'); }
+    if(d.ok){ $('#authModal').classList.add('hidden'); $('#otpInput').value=''; showToast('身份验证已通过，请核对办理内容并确认提交'); }
     else if(d.breaker?.locked){ showToast('安全保护已锁定，请联系人工客服'); }
   } catch(e) { announceA11y('暂时无法核对身份，请稍后重试或联系人工客服。'); showToast('暂时无法核对身份，请稍后重试或联系人工客服'); }
   finally { btn.disabled=false; setBusy(false); }

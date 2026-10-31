@@ -616,7 +616,7 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
 
 # C7: trusted configuration affects display text only, never machine facts or policy.
 class PlainLanguage:
-    FALLBACK = {"触发增强认证策略": "为了保护您的钱，请再确认一次", "强验证": "再次核对身份", "强认证": "再次核对身份"}
+    FALLBACK = {"触发增强认证策略": "为保障您的账户安全，请完成身份验证", "强验证": "身份验证", "强认证": "身份验证"}
 
     def __init__(self, path: Optional[Path] = None):
         self.configuration_status = "loaded"
@@ -3280,7 +3280,7 @@ class AgentRuntime(RecoveryMixin):
         self.auth_plan_snapshots[plan.plan_id] = plan
         self.audit.write(plan.trace_id, "auth.challenged", {"plan_id": plan.plan_id, "credential_id": credential.credential_id,
                           "binding": self._auth_payload(credential), "reason": "strong_auth_required"}, risk_level="red", intent=plan.intent)
-        response = self._response(plan, "当前操作需要强验证，请完成短信验证码或人脸识别。", needs_auth=True)
+        response = self._response(plan, "为保障您的账户安全，请在验证窗口完成身份验证。验证码仅用于本次验证，请勿向他人提供。", needs_auth=True)
         response["auth_challenge"] = {"credential_id": credential.credential_id, "expires_at": credential.expires_at.isoformat(),
                                        "binding": asdict(credential.binding)}
         if self.identity_service:
@@ -3458,7 +3458,7 @@ class AgentRuntime(RecoveryMixin):
             self.authenticated.add(plan_id)
             self.authenticated_credential[plan_id] = credential.credential_id
         self.audit.write(plan.trace_id, "auth.passed", {"plan_id": plan_id, "credential_id": credential.credential_id, "binding": self._auth_payload(credential)}, risk_level=plan.risk_level, intent=plan.intent)
-        response = self._response(plan, "强验证通过，请再次确认执行。")
+        response = self._response(plan, "身份验证已通过。请核对本次办理内容，确认无误后提交。")
         response["credential_id"] = credential.credential_id
         return response
 

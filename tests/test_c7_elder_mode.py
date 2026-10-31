@@ -32,12 +32,31 @@ class ElderModeTests(unittest.TestCase):
         with patch.object(ba, 'runtime', self.rt), patch.object(ba, 'gateway', ba.AgentGateway(self.rt)), patch.object(ba.http_rate_limiter, 'allow', return_value=True):
             return handler.do_POST()
 
+    def test_auth_copy_describes_verification_without_promising_unsupported_channels(self):
+        cards_before = copy.deepcopy(self.rt.bank.cards)
+        for elder in (False, True):
+            _, out = self.post('/api/chat', {'message': '帮我挂失银行卡', 'elder_mode': elder})
+            plan = out['plan']
+            body = {'plan_id': plan['plan_id'], 'action_token': plan['consent_token'], 'elder_mode': elder}
+            _, confirmation = self.post('/api/confirm', body)
+            self.assertTrue(confirmation['needs_auth'])
+            self.assertIn('为保障您的账户安全', confirmation['message'])
+            self.assertIn('身份验证', confirmation['message'])
+            self.assertIn('请勿向他人提供', confirmation['message'])
+            for unsupported in ('保护您的钱', '短信', '人脸', '再确认一次'):
+                self.assertNotIn(unsupported, confirmation['message'])
+            _, verified = self.post('/api/verify', dict(body, code='123456'))
+            self.assertIn('身份验证已通过', verified['message'])
+            self.assertIn('办理内容', verified['message'])
+            self.assertNotIn('收款人', verified['message'])
+            self.assertEqual(self.rt.bank.cards, cards_before)
+
     def test_configurable_terms_and_protected_facts(self):
         path = Path(self.tmp.name) / 'terms.json'
-        path.write_text(json.dumps({'terms': {'触发增强认证策略': '为了保护您的钱，请再确认一次', '风险复核': '银行需要再核对一下', '妈妈': '不可替换的名字'}}), encoding='utf-8')
+        path.write_text(json.dumps({'terms': {'触发增强认证策略': '为保障您的账户安全，请完成身份验证', '风险复核': '银行需要再核对一下', '妈妈': '不可替换的名字'}}), encoding='utf-8')
         layer = ba.PlainLanguage(path)
         self.assertEqual(layer.convert('触发增强认证策略，风险复核，给妈妈转 5,000.00 元', protected=['妈妈']),
-                         '为了保护您的钱，请再确认一次，银行需要再核对一下，给妈妈转 5,000.00 元')
+                         '为保障您的账户安全，请完成身份验证，银行需要再核对一下，给妈妈转 5,000.00 元')
         self.assertEqual(layer.convert('处理中，不是成功；失败；5000 元'), '处理中，不是成功；失败；5000 元')
 
     def test_invalid_config_falls_back_without_inventing_numbers(self):
@@ -54,7 +73,7 @@ class ElderModeTests(unittest.TestCase):
         response['message'] = '触发增强认证策略，金额 5,000 元，收款人妈妈'
         before = copy.deepcopy(response)
         plain = ba.present_plain_response(response, True)
-        self.assertIn('为了保护您的钱，请再确认一次', plain['message'])
+        self.assertIn('为保障您的账户安全，请完成身份验证', plain['message'])
         self.assertIn('5,000 元', plain['message'])
         self.assertEqual(response, before)
         self.assertEqual(plain['plan'], before['plan'])
@@ -193,11 +212,11 @@ const {chromium} = require(process.env.C7_PLAYWRIGHT_MODULE);
  await page.locator('#messageInput').fill('给妈妈转 5000 元');
  await page.locator('#sendBtn').click(); await page.locator('#confirmBtn').click();
  await page.locator('#authModal').waitFor({state:'visible'});
- assert.match(await page.locator('.message.bot .bubble').last().textContent(),/强验证/);
+ assert.match(await page.locator('.message.bot .bubble').last().textContent(),/身份验证/);
  await page.locator('#closeModal').click();
  const before=writes;
  await page.locator('#elderToggle').click();
- assert.match(await page.locator('.message.bot .bubble').last().textContent(),/为了保护您的钱，请再确认一次/);
+ assert.match(await page.locator('.message.bot .bubble').last().textContent(),/为保障您的账户安全，请在验证窗口完成身份验证/);
  assert.equal(writes,before,'切换模式不得重新提交银行操作');
  assert.equal(await page.locator('#confirmBtn').count(),1);
  await page.locator('#messageInput').fill('给妈妈转 1000 元，高收益稳赚');
