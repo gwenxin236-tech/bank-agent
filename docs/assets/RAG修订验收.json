@@ -1,0 +1,72 @@
+{
+  "schema": 1,
+  "status": "PASS_LOCAL_RAG_AND_FULL_REGRESSION",
+  "client_date": "2026-10-31",
+  "source_sha256": "02f3befdb5e96260960c51db409a26812cd4583b1a0b957fa99e14f2cf46a5f3",
+  "dataset_version": "p03-v3-paragraph-20261031-frozen",
+  "dataset_file_sha256": "719340cf4725b9988222f65d77488256e72512aa475f5f96bb2bcc98cf5efbeb",
+  "cases_unchanged_vs_v2": true,
+  "thresholds_unchanged": true,
+  "summaries": {
+    "lexical": {
+      "count": 120,
+      "hit_at_1": 0.9204545454545454,
+      "hit_at_3": 0.9772727272727273,
+      "mrr_at_3": 0.9488636363636364,
+      "ndcg_at_3": 0.9563028269074692,
+      "negative_refusal_rate": 1.0,
+      "correct": 113,
+      "failures": [
+        "cal-012",
+        "cal-015",
+        "cal-018",
+        "cal-031",
+        "hold-071",
+        "hold-075",
+        "hold-090"
+      ]
+    },
+    "hybrid": {
+      "count": 120,
+      "hit_at_1": 0.9659090909090909,
+      "hit_at_3": 1.0,
+      "mrr_at_3": 0.9829545454545454,
+      "ndcg_at_3": 0.9874180597808451,
+      "negative_refusal_rate": 0.96875,
+      "correct": 116,
+      "failures": [
+        "cal-031",
+        "hold-060",
+        "hold-069",
+        "hold-102"
+      ]
+    },
+    "reranked": {
+      "count": 120,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "negative_refusal_rate": 1.0,
+      "correct": 120,
+      "failures": []
+    }
+  },
+  "regressions": {
+    "lexical": [],
+    "hybrid": [],
+    "reranked": []
+  },
+  "human_status": "PENDING_EMPTY_TEMPLATE",
+  "cloud_calls": 0,
+  "network_forbidden_during_evaluation": true,
+  "full_regression": {
+    "tests": 779,
+    "skipped": 0,
+    "resource_warnings": 0,
+    "record": "data/verification/finalize-20261031/batch03/full-final.json"
+  },
+  "historical_corpus": "eval/knowledge_p03_v2.json",
+  "records": "data/verification/finalize-20261031/batch03/",
+  "original_database_unchanged": true
+}

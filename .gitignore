@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+data/*.sqlite3
+.DS_Store
+.env
+.env.*
+!.env.example
+
+*.zip
+
+# 过程文件：内部提示词、赛题原文、盘点笔记——永不上 GitHub
+_internal/
+
+# 提交包内的大文件：演示视频不进 git（报名系统单独上传，仓库放脚本与截图）
+submission/*.mp4
+
+# Optional browser QA tools and downloaded browsers; not application dependencies.
+.qa-tools/
+
+# Local acceptance logs, recordings and temporary databases are not source releases.
+data/verification/
+# Offline RAG binary distribution is shipped as a separate checksummed bundle.
+models/rag/
+models/reranker/
+models/ocr/
+*.sqlite3-wal
+*.sqlite3-shm
+
+# Root Word files are source/reference material; tracked files/history need separate review.
+/*.docx

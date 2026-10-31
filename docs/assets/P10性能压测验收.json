@@ -1,0 +1,1238 @@
+{
+  "schema": 1,
+  "status": "PASS_P10_LOCAL_SCOPE_EXTERNAL_LOAD_UNMEASURED",
+  "scope": "Engineering targets for one isolated local process, not official contest or production SLOs",
+  "load_model": "bounded closed-loop; includes client/TCP overhead; not open-arrival SLO proof",
+  "hardware": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "cpu": "",
+    "logical_cpus": 16,
+    "python": "3.12.15 (main, Oct 21 2026, 01:08:20) [GCC 14.2.0]",
+    "resource_scope": "benchmark process including server and load generator",
+    "cgroup_cpu_max": "400000 100000",
+    "cgroup_memory_max": "4294967296",
+    "cpu_model": "AMD Ryzen AI 7 H 350 w/ Radeon 860M"
+  },
+  "database_storage": "dedicated Linux Docker named volume, not tmpfs; only this newly created test volume removed after exit",
+  "dependency_versions": {
+    "onnxruntime": "1.23.2",
+    "tokenizers": "0.22.1",
+    "numpy": "2.2.6",
+    "rapidocr": "3.10.0",
+    "Pillow": "12.3.0",
+    "opencv-python-headless": "4.12.0.88"
+  },
+  "plan": {
+    "schema": 1,
+    "name": "P10 competition local offline capacity and stability",
+    "scope": "Engineering targets for one isolated local process, not official contest or production SLOs",
+    "concurrency": [
+      1,
+      2,
+      4,
+      8
+    ],
+    "stage_seconds": 10,
+    "stage_operation_cap": 200,
+    "soak_seconds": 300,
+    "soak_concurrency": 4,
+    "soak_target_rps": 2,
+    "soak_operation_cap": 1000,
+    "http_timeout_seconds": 10,
+    "capacity_http_limit": 100000,
+    "workload_mix": {
+      "read": 6,
+      "transfer": 3,
+      "support": 1
+    },
+    "default_limiter_probe_requests": 144,
+    "default_limiter_concurrency": 8,
+    "auth_accounts": 12,
+    "model_queries_per_level": 8,
+    "cold_restart_rto_seconds": 30,
+    "gates": {
+      "errors_max": 0,
+      "unknown_max": 0,
+      "timeouts_max": 0,
+      "duplicate_debit_cents_max": 0,
+      "single_user_read_p95_ms": 1500,
+      "single_user_transfer_p95_ms": 5000,
+      "single_user_support_p95_ms": 1500,
+      "single_user_p99_ms": 10000,
+      "soak_p95_ms": 5000,
+      "soak_goodput_rps_min": 0.5,
+      "rss_peak_bytes_max": 3221225472,
+      "soak_rss_growth_bytes_max": 268435456,
+      "auth_login_p95_ms": 3000,
+      "rag_single_p95_ms": 10000,
+      "rag_single_rerank_rate_min": 0.95,
+      "ocr_single_p95_ms": 15000
+    },
+    "unmeasured": [
+      "paid cloud LLM/embedding/ASR load",
+      "licensed real bank and third-party IM/IAM production load",
+      "open-loop arrival rates and production distributed capacity",
+      "human real-world corpus and physical second computer"
+    ]
+  },
+  "frozen_plan_sha256": "b47f2b6e550648bac02a00c4aed9c03f1f72f45a0eef85d5f6924812c3e541f1",
+  "gates": {
+    "complete_required_groups": true,
+    "financial_correctness": true,
+    "no_unexpected_errors": true,
+    "single_user_latency": true,
+    "soak_latency_and_goodput": true,
+    "default_limiter": true,
+    "identity": true,
+    "faults_and_breaker": true,
+    "crash_recovery": true,
+    "resource_budget": true,
+    "local_models": true,
+    "cold_start_and_rebuild": true
+  },
+  "image": {
+    "tag": "bank-agent-offline:t14-20261030-223019-762974",
+    "id": "sha256:41f179bfe1371caae3d32aa9bb7251fdf6743d2b1c0267af8b713b491cf0ceb2"
+  },
+  "metrics": {
+    "soak_seconds": 302.1862,
+    "soak_logical_operations": 600,
+    "soak_goodput_rps": 1.985530453833231,
+    "soak_p50_ms": 662.1023430001287,
+    "soak_p95_ms": 3198.0012521000385,
+    "soak_p99_ms": 4094.9652386499383,
+    "errors": 0,
+    "timeouts": 0,
+    "unknown": 0,
+    "duplicate_debit_cents": 0,
+    "expected_debit_cents": 240,
+    "actual_debit_cents": 240,
+    "audit_whole_prefix_valid": true,
+    "soak_rss_growth_bytes": 38793216,
+    "process_peak_rss_bytes": 1516498944,
+    "cold_start_seconds": [
+      0.8227788739998232,
+      0.7635383689998889,
+      0.7666337089999615
+    ],
+    "rto_observed_seconds": [
+      0.664,
+      0.72,
+      0.667
+    ],
+    "default_limiter_successful": 120,
+    "default_limiter_429": 24,
+    "auth_login_p95_ms": 558.2940565999479,
+    "rag_first_cold_ms": 3232.728103999989,
+    "rag_rebuild_ms": 286.04768600007446,
+    "ocr_p95_ms": 1579.4056155000817
+  },
+  "stages": [
+    {
+      "requests": 53,
+      "successful": 53,
+      "expected_rejections": 0,
+      "rate_limited": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "unknown": 0,
+      "elapsed_seconds": 10.0459,
+      "throughput_rps": 5.275770138780765,
+      "goodput_rps": 5.275770138780765,
+      "p50_ms": 121.90388200019697,
+      "p95_ms": 437.59569540002303,
+      "p99_ms": 461.86223599997896,
+      "http_status_counts": {
+        "200": 53
+      },
+      "concurrency": 1,
+      "requested_seconds": 10,
+      "operation_cap": 200,
+      "budget_exhausted": false,
+      "cpu_seconds": 4.011856904000002,
+      "cpu_percent_one_core": 39.93525894020067,
+      "expected_debit_cents": 15,
+      "by_operation": {
+        "read": {
+          "requests": 33,
+          "successful": 33,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 10.0459,
+          "throughput_rps": 3.2849134826370805,
+          "goodput_rps": 3.2849134826370805,
+          "p50_ms": 103.84199700001773,
+          "p95_ms": 126.88604240006498,
+          "p99_ms": 131.19111051988511,
+          "http_status_counts": {
+            "200": 33
+          }
+        },
+        "transfer": {
+          "requests": 15,
+          "successful": 15,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 10.0459,
+          "throughput_rps": 1.4931424921077638,
+          "goodput_rps": 1.4931424921077638,
+          "p50_ms": 401.9424010000421,
+          "p95_ms": 458.8186204999829,
+          "p99_ms": 468.28764649997083,
+          "http_status_counts": {
+            "200": 15
+          }
+        },
+        "support": {
+          "requests": 5,
+          "successful": 5,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 10.0459,
+          "throughput_rps": 0.4977141640359213,
+          "goodput_rps": 0.4977141640359213,
+          "p50_ms": 149.71577699998306,
+          "p95_ms": 171.06921039994631,
+          "p99_ms": 174.07458927995322,
+          "http_status_counts": {
+            "200": 5
+          }
+        }
+      }
+    },
+    {
+      "requests": 54,
+      "successful": 54,
+      "expected_rejections": 0,
+      "rate_limited": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "unknown": 0,
+      "elapsed_seconds": 10.1018,
+      "throughput_rps": 5.345556948982336,
+      "goodput_rps": 5.345556948982336,
+      "p50_ms": 205.40361350003877,
+      "p95_ms": 938.8597495499539,
+      "p99_ms": 1041.2138961900291,
+      "http_status_counts": {
+        "200": 54
+      },
+      "concurrency": 2,
+      "requested_seconds": 10,
+      "operation_cap": 200,
+      "budget_exhausted": false,
+      "cpu_seconds": 5.437006296,
+      "cpu_percent_one_core": 53.8220111407676,
+      "expected_debit_cents": 15,
+      "by_operation": {
+        "read": {
+          "requests": 34,
+          "successful": 34,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 10.1018,
+          "throughput_rps": 3.365721041951841,
+          "goodput_rps": 3.365721041951841,
+          "p50_ms": 182.05774749992543,
+          "p95_ms": 264.608258349972,
+          "p99_ms": 298.1817718799858,
+          "http_status_counts": {
+            "200": 34
+          }
+        },
+        "transfer": {
+          "requests": 15,
+          "successful": 15,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 10.1018,
+          "throughput_rps": 1.484876930272871,
+          "goodput_rps": 1.484876930272871,
+          "p50_ms": 834.4609580001361,
+          "p95_ms": 1035.534319100043,
+          "p99_ms": 1054.2435142199975,
+          "http_status_counts": {
+            "200": 15
+          }
+        },
+        "support": {
+          "requests": 5,
+          "successful": 5,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 10.1018,
+          "throughput_rps": 0.4949589767576236,
+          "goodput_rps": 0.4949589767576236,
+          "p50_ms": 200.00827700005175,
+          "p95_ms": 217.342366199955,
+          "p99_ms": 219.77187323995167,
+          "http_status_counts": {
+            "200": 5
+          }
+        }
+      }
+    },
+    {
+      "requests": 51,
+      "successful": 51,
+      "expected_rejections": 0,
+      "rate_limited": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "unknown": 0,
+      "elapsed_seconds": 11.3831,
+      "throughput_rps": 4.480337681764957,
+      "goodput_rps": 4.480337681764957,
+      "p50_ms": 503.38942500002304,
+      "p95_ms": 2043.2881624999482,
+      "p99_ms": 2124.9341765000054,
+      "http_status_counts": {
+        "200": 51
+      },
+      "concurrency": 4,
+      "requested_seconds": 10,
+      "operation_cap": 200,
+      "budget_exhausted": false,
+      "cpu_seconds": 6.754076528000002,
+      "cpu_percent_one_core": 59.334482516405,
+      "expected_debit_cents": 15,
+      "by_operation": {
+        "read": {
+          "requests": 31,
+          "successful": 31,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 11.3831,
+          "throughput_rps": 2.723342512445366,
+          "goodput_rps": 2.723342512445366,
+          "p50_ms": 448.47386600008576,
+          "p95_ms": 995.2467569999044,
+          "p99_ms": 1073.0546653999681,
+          "http_status_counts": {
+            "200": 31
+          }
+        },
+        "transfer": {
+          "requests": 15,
+          "successful": 15,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 11.3831,
+          "throughput_rps": 1.317746376989693,
+          "goodput_rps": 1.317746376989693,
+          "p50_ms": 1823.112005999974,
+          "p95_ms": 2107.894058699935,
+          "p99_ms": 2155.606388540132,
+          "http_status_counts": {
+            "200": 15
+          }
+        },
+        "support": {
+          "requests": 5,
+          "successful": 5,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 11.3831,
+          "throughput_rps": 0.4392487923298977,
+          "goodput_rps": 0.4392487923298977,
+          "p50_ms": 220.6194290001804,
+          "p95_ms": 263.119444799986,
+          "p99_ms": 269.6513609599697,
+          "http_status_counts": {
+            "200": 5
+          }
+        }
+      }
+    },
+    {
+      "requests": 49,
+      "successful": 49,
+      "expected_rejections": 0,
+      "rate_limited": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "unknown": 0,
+      "elapsed_seconds": 11.8527,
+      "throughput_rps": 4.134091128188515,
+      "goodput_rps": 4.134091128188515,
+      "p50_ms": 1772.8781659998276,
+      "p95_ms": 2809.659317799924,
+      "p99_ms": 2891.8456361599783,
+      "http_status_counts": {
+        "200": 49
+      },
+      "concurrency": 8,
+      "requested_seconds": 10,
+      "operation_cap": 200,
+      "budget_exhausted": false,
+      "cpu_seconds": 7.304569237999999,
+      "cpu_percent_one_core": 61.62822063947916,
+      "expected_debit_cents": 15,
+      "by_operation": {
+        "read": {
+          "requests": 30,
+          "successful": 30,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 11.8527,
+          "throughput_rps": 2.531076200931744,
+          "goodput_rps": 2.531076200931744,
+          "p50_ms": 1567.0543090000137,
+          "p95_ms": 2411.845067899992,
+          "p99_ms": 2427.944704659924,
+          "http_status_counts": {
+            "200": 30
+          }
+        },
+        "transfer": {
+          "requests": 15,
+          "successful": 15,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 11.8527,
+          "throughput_rps": 1.265538100465872,
+          "goodput_rps": 1.265538100465872,
+          "p50_ms": 2550.7533859999967,
+          "p95_ms": 2890.4762773999664,
+          "p99_ms": 2893.9619178799967,
+          "http_status_counts": {
+            "200": 15
+          }
+        },
+        "support": {
+          "requests": 4,
+          "successful": 4,
+          "expected_rejections": 0,
+          "rate_limited": 0,
+          "errors": 0,
+          "timeouts": 0,
+          "unknown": 0,
+          "elapsed_seconds": 11.8527,
+          "throughput_rps": 0.3374768267908992,
+          "goodput_rps": 0.3374768267908992,
+          "p50_ms": 254.54356850002569,
+          "p95_ms": 270.9617721499285,
+          "p99_ms": 271.248056029915,
+          "http_status_counts": {
+            "200": 4
+          }
+        }
+      }
+    }
+  ],
+  "soak": {
+    "requests": 600,
+    "successful": 600,
+    "expected_rejections": 0,
+    "rate_limited": 0,
+    "errors": 0,
+    "timeouts": 0,
+    "unknown": 0,
+    "elapsed_seconds": 302.1862,
+    "throughput_rps": 1.985530453833231,
+    "goodput_rps": 1.985530453833231,
+    "p50_ms": 662.1023430001287,
+    "p95_ms": 3198.0012521000385,
+    "p99_ms": 4094.9652386499383,
+    "http_status_counts": {
+      "200": 600
+    },
+    "concurrency": 4,
+    "requested_seconds": 300,
+    "operation_cap": 1000,
+    "budget_exhausted": false,
+    "cpu_seconds": 196.82444017400002,
+    "cpu_percent_one_core": 65.13349081515622,
+    "expected_debit_cents": 180,
+    "by_operation": {
+      "read": {
+        "requests": 360,
+        "successful": 360,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 302.1862,
+        "throughput_rps": 1.1913182722999387,
+        "goodput_rps": 1.1913182722999387,
+        "p50_ms": 448.48724149994723,
+        "p95_ms": 1020.8841659000882,
+        "p99_ms": 1219.9827135899875,
+        "http_status_counts": {
+          "200": 360
+        }
+      },
+      "transfer": {
+        "requests": 180,
+        "successful": 180,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 302.1862,
+        "throughput_rps": 0.5956591361499693,
+        "goodput_rps": 0.5956591361499693,
+        "p50_ms": 2239.721818499902,
+        "p95_ms": 4026.7717515999493,
+        "p99_ms": 4616.811541490029,
+        "http_status_counts": {
+          "200": 180
+        }
+      },
+      "support": {
+        "requests": 60,
+        "successful": 60,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 302.1862,
+        "throughput_rps": 0.1985530453833231,
+        "goodput_rps": 0.1985530453833231,
+        "p50_ms": 403.5025634999556,
+        "p95_ms": 874.7150397501058,
+        "p99_ms": 1042.5386784700158,
+        "http_status_counts": {
+          "200": 60
+        }
+      }
+    }
+  },
+  "http": {
+    "requests": 1524,
+    "successful": 1284,
+    "expected_rejections": 240,
+    "rate_limited": 0,
+    "errors": 0,
+    "timeouts": 0,
+    "unknown": 0,
+    "elapsed_seconds": 345.5697,
+    "throughput_rps": 4.410108872392458,
+    "goodput_rps": 3.715603538157425,
+    "p50_ms": 288.3644229999618,
+    "p95_ms": 1756.50900215005,
+    "p99_ms": 2408.315040169964,
+    "http_status_counts": {
+      "200": 1524
+    }
+  },
+  "correctness": {
+    "expected_debit_cents": 240,
+    "actual_debit_cents": 240,
+    "core_transaction_count": 240,
+    "duplicate_debit_cents": 0,
+    "exact_ledger_match": true,
+    "audit_whole_prefix_valid": true,
+    "audit_verified_through_last_trace": "trace_mdgdikloicpb",
+    "available_cents": 26852760
+  },
+  "identity": {
+    "requests": 12,
+    "successful": 12,
+    "expected_rejections": 0,
+    "rate_limited": 0,
+    "errors": 0,
+    "timeouts": 0,
+    "unknown": 0,
+    "elapsed_seconds": 1.7831,
+    "throughput_rps": 6.729707908379419,
+    "goodput_rps": 6.729707908379419,
+    "p50_ms": 344.6189620001405,
+    "p95_ms": 558.2940565999479,
+    "p99_ms": 563.5999057199797,
+    "http_status_counts": {
+      "200": 12
+    },
+    "scope": "distinct synthetic users, actual password/TOTP verification; no bank account granted to these identities",
+    "passed": true
+  },
+  "limiter": {
+    "requests": 144,
+    "successful": 120,
+    "expected_rejections": 0,
+    "rate_limited": 24,
+    "errors": 0,
+    "timeouts": 0,
+    "unknown": 0,
+    "elapsed_seconds": 10.2884,
+    "throughput_rps": 13.996350947777543,
+    "goodput_rps": 11.66362578981462,
+    "p50_ms": 680.2525334999245,
+    "p95_ms": 773.4838289500203,
+    "p99_ms": 805.6847856198419,
+    "http_status_counts": {
+      "200": 120,
+      "429": 24
+    },
+    "configured_limit": 120,
+    "window_seconds": 60,
+    "passed": true
+  },
+  "models": {
+    "rag": [
+      {
+        "requests": 8,
+        "successful": 8,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 4.2039,
+        "throughput_rps": 1.9030014349627824,
+        "goodput_rps": 1.9030014349627824,
+        "p50_ms": 141.59912699994948,
+        "p95_ms": 2153.8520106000205,
+        "p99_ms": 3016.952885319994,
+        "http_status_counts": {
+          "200": 8
+        },
+        "concurrency": 1,
+        "rerank_applied": 8,
+        "rerank_rate": 1.0,
+        "degraded": 0,
+        "fully_reranked_goodput_rps": 1.9029636652649282,
+        "retrieval_modes": [
+          "local_vector"
+        ]
+      },
+      {
+        "requests": 8,
+        "successful": 8,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 1.0697,
+        "throughput_rps": 7.47850379104092,
+        "goodput_rps": 7.47850379104092,
+        "p50_ms": 264.63038250005866,
+        "p95_ms": 282.46970415011674,
+        "p99_ms": 286.0357648301033,
+        "http_status_counts": {
+          "200": 8
+        },
+        "concurrency": 2,
+        "rerank_applied": 8,
+        "rerank_rate": 1.0,
+        "degraded": 0,
+        "fully_reranked_goodput_rps": 7.47800534482352,
+        "retrieval_modes": [
+          "local_vector"
+        ]
+      },
+      {
+        "requests": 8,
+        "successful": 8,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 1.0665,
+        "throughput_rps": 7.500924249822131,
+        "goodput_rps": 7.500924249822131,
+        "p50_ms": 527.512821000073,
+        "p95_ms": 540.6812569499493,
+        "p99_ms": 542.437210589926,
+        "http_status_counts": {
+          "200": 8
+        },
+        "concurrency": 4,
+        "rerank_applied": 8,
+        "rerank_rate": 1.0,
+        "degraded": 0,
+        "fully_reranked_goodput_rps": 7.500590303489916,
+        "retrieval_modes": [
+          "local_vector"
+        ]
+      },
+      {
+        "requests": 8,
+        "successful": 8,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 1.0783,
+        "throughput_rps": 7.419166958777748,
+        "goodput_rps": 7.419166958777748,
+        "p50_ms": 588.263133499936,
+        "p95_ms": 1021.7923228500013,
+        "p99_ms": 1061.0042813699374,
+        "http_status_counts": {
+          "200": 8
+        },
+        "concurrency": 8,
+        "rerank_applied": 8,
+        "rerank_rate": 1.0,
+        "degraded": 0,
+        "fully_reranked_goodput_rps": 7.418807855092073,
+        "retrieval_modes": [
+          "local_vector"
+        ]
+      }
+    ],
+    "rag_cold_first_request_included": true,
+    "rag_first_process_cold_ms": 3232.728103999989,
+    "cold_scope": "new process/model sessions; operating-system caches not flushed",
+    "rag_clear_index_rebuild_ms": 286.04768600007446,
+    "rag_rebuild_verified": true,
+    "ocr": {
+      "requests": 4,
+      "successful": 4,
+      "expected_rejections": 0,
+      "rate_limited": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "unknown": 0,
+      "elapsed_seconds": 3.3853,
+      "throughput_rps": 1.1815948907292524,
+      "goodput_rps": 1.1815948907292524,
+      "p50_ms": 554.3628870000248,
+      "p95_ms": 1579.4056155000817,
+      "p99_ms": 1721.2919199000773,
+      "http_status_counts": {
+        "200": 4
+      }
+    },
+    "ocr_fixture_sha256": "59fa520601544409bdbc90ab8fe5537d7384ae818aaaa7fdcc891b59ae69dd97",
+    "audio_hash": {
+      "requests": 100,
+      "successful": 100,
+      "expected_rejections": 0,
+      "rate_limited": 0,
+      "errors": 0,
+      "timeouts": 0,
+      "unknown": 0,
+      "elapsed_seconds": 0.0112,
+      "throughput_rps": 8953.97032506273,
+      "goodput_rps": 8953.97032506273,
+      "p50_ms": 0.10481100014203548,
+      "p95_ms": 0.14023844995563192,
+      "p99_ms": 0.1725470699875596,
+      "http_status_counts": {
+        "200": 100
+      }
+    },
+    "scope": "local models, fixed synthetic OCR and WAV; no cloud ASR/model request"
+  },
+  "faults": {
+    "duplicate_confirmations": {
+      "logical_transfers": 10,
+      "attempts": 80,
+      "successes": 10,
+      "actual_debit_cents": 10,
+      "elapsed_seconds": 4.096961014000044,
+      "passed": true
+    },
+    "unknown_result": {
+      "expected_injected_processing": true,
+      "queries_did_not_retry_debit": true,
+      "explicit_mock_terminal_update": "succeeded",
+      "single_terminal_debit": true,
+      "passed": true
+    },
+    "breaker": {
+      "locked_after_failures": true,
+      "no_debit": true,
+      "passed": true
+    }
+  },
+  "recovery": {
+    "status": "PASS",
+    "scope": "demo_only_not_production_dr_acceptance",
+    "rpo_acknowledged_waiting_tasks_lost": 0,
+    "rto_target_seconds": 30.0,
+    "rto_observed_seconds": [
+      0.664,
+      0.72,
+      0.667
+    ],
+    "core_transaction_count": 2,
+    "debit_total_cents": 510000,
+    "expired_auth_rechallenged": true,
+    "checks": [
+      {
+        "check": "ready_database_and_scheduler",
+        "status": "PASS"
+      },
+      {
+        "check": "demo_rto_within_target",
+        "status": "PASS"
+      },
+      {
+        "check": "http_chat",
+        "status": "PASS"
+      },
+      {
+        "check": "task_acknowledged_waiting",
+        "status": "PASS"
+      },
+      {
+        "check": "http_status",
+        "status": "PASS"
+      },
+      {
+        "check": "first_waiting_before_crash",
+        "status": "PASS"
+      },
+      {
+        "check": "ready_database_and_scheduler",
+        "status": "PASS"
+      },
+      {
+        "check": "demo_rto_within_target",
+        "status": "PASS"
+      },
+      {
+        "check": "http_status",
+        "status": "PASS"
+      },
+      {
+        "check": "first_waiting_after_restart",
+        "status": "PASS"
+      },
+      {
+        "check": "scheduler_did_not_execute_waiting",
+        "status": "PASS"
+      },
+      {
+        "check": "double_confirm_only_one_success",
+        "status": "PASS"
+      },
+      {
+        "check": "http_status",
+        "status": "PASS"
+      },
+      {
+        "check": "first_final_status_queried",
+        "status": "PASS"
+      },
+      {
+        "check": "first_single_debit",
+        "status": "PASS"
+      },
+      {
+        "check": "http_chat",
+        "status": "PASS"
+      },
+      {
+        "check": "task_acknowledged_waiting",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "http_verify",
+        "status": "PASS"
+      },
+      {
+        "check": "high_risk_authenticated_before_crash",
+        "status": "PASS"
+      },
+      {
+        "check": "private_expiry_injection_target",
+        "status": "PASS"
+      },
+      {
+        "check": "ready_database_and_scheduler",
+        "status": "PASS"
+      },
+      {
+        "check": "demo_rto_within_target",
+        "status": "PASS"
+      },
+      {
+        "check": "http_status",
+        "status": "PASS"
+      },
+      {
+        "check": "high_risk_restored_waiting",
+        "status": "PASS"
+      },
+      {
+        "check": "no_high_risk_auto_execution",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "expired_credential_rejected",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "expired_auth_rechallenged",
+        "status": "PASS"
+      },
+      {
+        "check": "fresh_auth_required_before_debit",
+        "status": "PASS"
+      },
+      {
+        "check": "http_verify",
+        "status": "PASS"
+      },
+      {
+        "check": "fresh_auth_passed",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "high_risk_confirm_completed",
+        "status": "PASS"
+      },
+      {
+        "check": "http_status",
+        "status": "PASS"
+      },
+      {
+        "check": "high_risk_final_status_queried",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "credential_replay_rejected",
+        "status": "PASS"
+      },
+      {
+        "check": "no_duplicate_side_effects",
+        "status": "PASS"
+      },
+      {
+        "check": "audit_chain_valid",
+        "status": "PASS"
+      },
+      {
+        "check": "audit_chain_valid",
+        "status": "PASS"
+      },
+      {
+        "check": "ready_database_and_scheduler",
+        "status": "PASS"
+      },
+      {
+        "check": "demo_rto_within_target",
+        "status": "PASS"
+      },
+      {
+        "check": "http_status",
+        "status": "PASS"
+      },
+      {
+        "check": "completed_task_still_succeeded",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "completed_confirm_not_replayed",
+        "status": "PASS"
+      },
+      {
+        "check": "http_confirm",
+        "status": "PASS"
+      },
+      {
+        "check": "used_credential_survives_restart",
+        "status": "PASS"
+      },
+      {
+        "check": "post_restart_no_duplicate_side_effects",
+        "status": "PASS"
+      },
+      {
+        "check": "exactly_two_confirmation_grants",
+        "status": "PASS"
+      }
+    ],
+    "returncode": 0
+  },
+  "native_core_read": {
+    "status": "PASS_LOCAL_CORE_READ_SCOPE",
+    "scope": "raw native read API on pinned self-hosted synthetic core; no platform transfer/load or licensed-bank claim",
+    "frozen_plan_sha256": "d5184170b80f176c2f0ccea25c8a8d910e1c9448846c0e049561e4f22f4caf5e",
+    "preregistered_gate": "single-user read p95 from config/performance_plan.json; errors/timeouts zero; both balances unchanged",
+    "hardware": {
+      "platform": "Windows-11-10.0.26100-SP0",
+      "python": "3.13.5 | packaged by Anaconda, Inc. | (main, Jun 12 2025, 16:37:03) [MSC v.1929 64 bit (AMD64)]",
+      "logical_cpus": 16
+    },
+    "stages": [
+      {
+        "requests": 50,
+        "successful": 50,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 6.4266,
+        "throughput_rps": 7.7801939601765735,
+        "goodput_rps": 7.7801939601765735,
+        "p50_ms": 109.49415000504814,
+        "p95_ms": 153.88238999585147,
+        "p99_ms": 488.8243470044097,
+        "http_status_counts": {
+          "200": 50
+        },
+        "concurrency": 1,
+        "requested_seconds": 10,
+        "request_cap_per_worker": 50,
+        "budget_exhausted": true
+      },
+      {
+        "requests": 100,
+        "successful": 100,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 5.4513,
+        "throughput_rps": 18.344189271764193,
+        "goodput_rps": 18.344189271764193,
+        "p50_ms": 105.91500002192333,
+        "p95_ms": 123.89442999556195,
+        "p99_ms": 130.14660795568489,
+        "http_status_counts": {
+          "200": 100
+        },
+        "concurrency": 2,
+        "requested_seconds": 10,
+        "request_cap_per_worker": 50,
+        "budget_exhausted": true
+      },
+      {
+        "requests": 200,
+        "successful": 200,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 6.1723,
+        "throughput_rps": 32.4029506513742,
+        "goodput_rps": 32.4029506513742,
+        "p50_ms": 108.43739996198565,
+        "p95_ms": 130.30694501067046,
+        "p99_ms": 793.7005430215504,
+        "http_status_counts": {
+          "200": 200
+        },
+        "concurrency": 4,
+        "requested_seconds": 10,
+        "request_cap_per_worker": 50,
+        "budget_exhausted": true
+      },
+      {
+        "requests": 400,
+        "successful": 400,
+        "expected_rejections": 0,
+        "rate_limited": 0,
+        "errors": 0,
+        "timeouts": 0,
+        "unknown": 0,
+        "elapsed_seconds": 5.882,
+        "throughput_rps": 68.00455310860093,
+        "goodput_rps": 68.00455310860093,
+        "p50_ms": 114.25400001462549,
+        "p95_ms": 135.22784998931456,
+        "p99_ms": 145.45537398196757,
+        "http_status_counts": {
+          "200": 400
+        },
+        "concurrency": 8,
+        "requested_seconds": 10,
+        "request_cap_per_worker": 50,
+        "budget_exhausted": true
+      }
+    ],
+    "before_cents": {
+      "source": 10000000,
+      "target": 0
+    },
+    "after_cents": {
+      "source": 10000000,
+      "target": 0
+    },
+    "gates": {
+      "single_read_latency": true,
+      "no_read_errors": true,
+      "no_bank_side_effect": true
+    }
+  },
+  "native_core_environment": {
+    "containers": [
+      {
+        "container": "bank-p07-fineract-fineract-1",
+        "image_reference": "apache/fineract@sha256:0cd33902744e0e527e52fd905f65d67b706a35c40085fb21034653e0b2064aa4",
+        "image_id": "sha256:0cd33902744e0e527e52fd905f65d67b706a35c40085fb21034653e0b2064aa4",
+        "memory_limit_bytes": 1610612736,
+        "nano_cpus": 0
+      },
+      {
+        "container": "bank-p07-fineract-db-1",
+        "image_reference": "postgres@sha256:a145910d7079e9fbf73e6df19d5fcca0ce59d747cf7d97ac772bff28c3759c32",
+        "image_id": "sha256:a145910d7079e9fbf73e6df19d5fcca0ce59d747cf7d97ac772bff28c3759c32",
+        "memory_limit_bytes": 536870912,
+        "nano_cpus": 0
+      }
+    ],
+    "engine": {
+      "ServerVersion": "29.9.2",
+      "NCPU": 16,
+      "MemTotal": 16391532544
+    },
+    "scope": "native core and DB on existing isolated local project; zero NanoCpus means no per-container CPU quota"
+  },
+  "source_hashes": {
+    "app/operational_readiness.py": "cbc0dbc9449b8ba5ed28753dfd94320c7c677e2d79928ecc07f5325888e29f54",
+    "app/speech_adapter.py": "7564514c875f3169e1e1c8dc0a6be6ca1b2a5c61065eea4ab3b04b9e816303b0",
+    "app/channel_contracts.py": "145418b8b9a2111e2de7ee315a43fd96e93583db3f44b585228f5052d76daf41",
+    "app/live_support.py": "320eb467e20cc88f7ba046325cb8e26fb704a69e3a327d9ff3843f8cc003fae1",
+    "app/conversation_context.py": "731a377c525f4524024a9b7c0ccae3c6c0131b8b518805ad0d1ca98f09d02a84",
+    "app/tool_contract.py": "fb8d63961fa1808308ad6038fdd8c7c1d9cc091c0fd400650967e64bd8e7fb22",
+    "app/production_contracts.py": "2d072dbb17b51d1ff59219f6a45e7206931327be69040cbc49259dc2f492ae08",
+    "app/domain_snapshots.py": "f2fdb947c6b7c70cde89c7cbc2cae5a863ff1cd159603ee20701d9980aca8e21",
+    "app/identity_service.py": "30c3a8d1a1a0bd76546a041f513cfe02a156dc79882a9193ce325c7fe69b52a8",
+    "app/production_backends.py": "0d7e0f63843c746ae080484b33e2bbc11ebf72276c293300da13c85bbc96a80f",
+    "app/guardianship.py": "f2ff60320638823a9593d30ab114c71902e69f6ffb162a533747d9ccff938d33",
+    "app/banking_agent.py": "fcc5d099a88da0ffdf9ca42584184e8656ab9550207d205027d9d3db2eb596b5",
+    "app/handoff_queue.py": "a1938450deb54f5e0ae784395b5857a319213751765961301066999a9c58f0cf",
+    "app/llm_adapter.py": "7d0b7b70e19200c692113bb2768139321fde5273f92364aa509ac7b704789b8d",
+    "app/dag_planner.py": "849e89333a2ddfbe73b1f35ac3bf8553de7f989d033e2e5b0d7660a6d58ac733",
+    "app/preflight.py": "e7dd0c6ae0d89232cfaa307a98a6a1a173f455d9fca99f29a8f99a581520ce3f",
+    "app/policy_config.py": "b08716f2166ece5d21f68596d594171a8cdb30ab9dfeac79bd85277b86fd54ef",
+    "app/security_controls.py": "136d0f794ec565306f9b0def0a7458eb959382e5f982923d39246f4eddd23222",
+    "app/domain_agent_contract.py": "6affee37460c01332b609aaff8ae54277bbb843b896b453ee54cae631001f19c",
+    "app/ledger_views.py": "2aeeba6e7be176c7728b0ea1dbdbb8c54ffdfbae88d7a2de754276ae120ed8e1",
+    "app/handoff_contract.py": "953691fd85afad90c49a2b8f07fc533ee27740f587caff2ec8baf139d15a8f79",
+    "app/local_channel.py": "8e10b732bb02294315578ec1f5fb315b26b85e5ce92ee67a7d0937bd27161ce4",
+    "app/family_access.py": "82aea52656b31ecb691290eca7532033ab73b133b77970014353e9e85a876bf0",
+    "app/security_evaluation.py": "37f74666afddbf0992f16f37d5fe143a2ef1c04fdd4bdfaaf12c5205abecd9d1",
+    "app/notification_bus.py": "83fe968f67aa439cc8c6e709c36640d2d63ea0107d9354f7755728e320d55eef",
+    "app/task_dag.py": "ddf741d8d38ba1a3ce6ee33fd21a43c0faeb9b0e40fa2b81f08b130ebeff120b",
+    "app/risk_controls.py": "a84e34452aa12b10edde154b132e9a5ce7c8245f6b5588b19226b99e2bea5ccf",
+    "app/bank_service.py": "00750532abade40e58f2ac4c966521164f44220a62d99c33efa0fb15e758e0b8",
+    "app/local_reranker.py": "a28a9d5eb18e5fd8dea1917b7dbd4e916be0376d4836081d246c92e82ae2b1af",
+    "app/fineract_transport.py": "eb915f2c4ea4b9981a6447ccbd91d4112af6319b177ed88e5d5b456e0f79ba99",
+    "app/domain_agent_registry.py": "49d7de818ac7eb997c76f6d6b18651c90275f4f5a29a4936c2ca6f106abd5c69",
+    "app/sandbox_execution.py": "b1cc0fe7ade464d5672863e0e5e3c0a3e3b67c2417f0b80e81d36667c7f3c940",
+    "app/feature_registry.py": "fc36f53bdfc4c26d9ca4cdbd84a5c3e8b6a6c5243fcf37c1c1a9e363b0039050",
+    "app/local_embeddings.py": "d2808e743eeb339246cb5ee46a5c95f08ce9ca5807556038f8621312ede3e3ea",
+    "app/supervisor.py": "2dd3433cc7b50e0697385d1565a9158ec37349fa18bf15ae06c3272b2e5a62da",
+    "app/recovery.py": "de0cc438ab9d1751c648391dacb0a8bd6e5f7622fba5fcdb3e0fc358fb3c88bc",
+    "app/transaction_views.py": "a4dd7d0fbc5dd7f7f61332b5d34a8716bbb659726ef0dd38f021b6b8f1a8cf5c",
+    "app/knowledge_service.py": "c008316b32ff7227b1b122afaa700d144243b6ab66a1f86ea6ad49975de93049",
+    "app/transaction_agent.py": "644b59bc73c93f42f94922aa82dcc515b106abfe306a82fd2b61c6eba8a0c78a",
+    "app/ocr_service.py": "4b472d7fcac2f73bab8deebb5a2bd6880771a9b6f61fa78bac92381736d22b3b",
+    "app/agents/finance_health_agent.py": "f4d72460689af7a591ea896f5b74a01e46b5fe36be51c965ee0e76c6de8d1d4b",
+    "app/agents/__init__.py": "667ba7a5a47c0b14ddfbf4ea81a4a274f48ef512932289903bd0f2cf92517769",
+    "app/agents/card_agent.py": "0d404fb5c4e4de9ff64d075fb81e65114f58c409261af2d09373862663383a61",
+    "app/agents/payment_agent.py": "3ac316e4a070a8b8154d141c8700d6293ec9e305ca7fbbf8d5cb70eb355d8fa9",
+    "app/agents/family_agent.py": "39bf630dc29dc73a422623808a42702565717c31c105fbb6c335a10ced539bc3",
+    "app/agents/subscription_agent.py": "d4a3c8debba805536f764efff6584cb037b04b59ba490e12f01f7534197d3e37",
+    "app/agents/antifraud_agent.py": "6de79d1805a3fc7e4ca35ba96b87eba7903a3c794ec1b9a90bf633caf616b93e",
+    "app/features/__init__.py": "68ad936eca05a08f032eb631cb0407c47bdade78c0dc4b5c9e8c6762ed5aa4c2",
+    "app/static/operator.html": "08d006167974e3167c55f6b5b9efe14c7c55cc69e2888ce86288dbd941204d4e",
+    "app/static/style.css": "8b1d7215cebc371ac77682c8eb6395174835085bbb85ba5405762fe5308b6a16",
+    "app/static/app.js": "797528cf4ede7ecc9ad0ce43bab6c1952511548871f499256fbbebb8d09f19f5",
+    "app/static/manifest.json": "c2a1fe5ca73cd1cb3065c6f4bc08b1221d953ab5308335ad854cbdad475e3f61",
+    "app/static/index.html": "c81837eb44bc2a1affbeee14293320bac98dd37011dc57126789a69ee2ccecb7",
+    "app/features/family/__init__.py": "0762485509f389850127cbf91f3b51a293d8ee890c78a1984074975fc75873bf",
+    "app/features/family/tools.py": "1dc4985a69f4ce82101dce007189f119755dff08fa8253c7fbb9b796a43d68c2",
+    "app/features/elderly/__init__.py": "604e1a4375ad8b2452b6d51d48f1807605247350fce21dea296271a1484482e1",
+    "app/features/elderly/tools.py": "bea2da40ea77cdaca1a00827de5874186176d8865d332b05bd840973060a7eee",
+    "app/features/antifraud/__init__.py": "ee73ffac21df04fe18e8cdbf03ce2867a5289f27a4b717b25930628e1e80fd1b",
+    "app/features/antifraud/tools.py": "94bfcc09655749575ec8d52ac592bc8b64f142d16ec14afafb270490d4b18208",
+    "app/features/finance_health/__init__.py": "ca4fd08cc249bb7fcfc83af68a4ddaf2f8c7d386441581cd2c9df85349cf3060",
+    "app/features/finance_health/tools.py": "7b172f4d58142fae45d68a0b31614b9f0b838901d60ea45584a7d35bd198a870",
+    "config/plain_language.json": "df34d34503770f6a2fecc80c0241effd403d72b32d25f1f1ee746fe42ca85128",
+    "config/policy.json": "d7ff98bf229367bc7725c864d6651412a97f19bae48f24244ceec5120df7f93e",
+    "config/knowledge.json": "4ed5e93368cb5e539c361b817709091de443f0f2d41ed941cb22bdcf2a86b5ce",
+    "config/performance_plan.json": "cdaa1fb23324ab234cf4396afaed43256bc04f4cedf68facd4fc289797ceeb4e",
+    "config/guardianship.json": "6bcfc118924611c9ed7fee8429ea9f2d61462498b701faeace406b4aa01a3bb9",
+    "config/features.json": "0918c72e10fc7fab5b6dcbf793808857c40a35664f390eadcfe0c3b46b27853a",
+    "config/fraud_rules.json": "77077249fc20dfb3e85815f7ecb3c871d5f27e3064cf786101998a9e1acdd146",
+    "scripts/platform_load_test.py": "188a72f1a0c9f2261f6f775e6248adee8f1d6d39e9415e22b45cc3356de42990",
+    "scripts/rag_load_test.py": "954a0dd77e826d4b95094968f835c7c0414fb7aace381f6f17d93ce83b759ef6",
+    "scripts/drill_recovery.py": "f7906a09b4b83d1e0757082230b378f8d03908899d1981475276c82e647a2767",
+    "models/rag/manifest.json": "0425c6efe2646b65a379db93e3609823a18bbed141ff3a1c55f39f24480bb450",
+    "models/reranker/manifest.json": "a763800be922720f65eff67cee1806894a8d07d53c234b4eadfe77371a4ba009",
+    "models/ocr/manifest.json": "2978362214ce673a242d86c358ccbb82fc8d0cab1244cf89d74d91a282e9fc21"
+  },
+  "regression": {
+    "full_tests": 762,
+    "container_tests": 96,
+    "unit_tests": 10,
+    "migration_checks": 53,
+    "skipped": 0,
+    "resource_warnings": 0
+  },
+  "fixture": {
+    "path": "docs/assets/P10合成OCR样本.png",
+    "sha256": "59fa520601544409bdbc90ab8fe5537d7384ae818aaaa7fdcc891b59ae69dd97"
+  },
+  "unmeasured": [
+    "paid cloud LLM/embedding/ASR load",
+    "licensed real bank and third-party IM/IAM production load",
+    "open-loop arrival rates and production distributed capacity",
+    "human real-world corpus and physical second computer"
+  ],
+  "scope_note": "Native core is bounded read-only. Saturated RAG degradation is not full-rerank capacity. Process resources include load generator. Empirical quantiles do not imply production confidence or SLO."
+}

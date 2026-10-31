@@ -1,0 +1,11 @@
+# Optional offline OCR; explicitly approved. Base stdlib requirements stay empty.
+-r requirements-rag-local.txt
+rapidocr==3.10.0
+Pillow==12.3.0
+opencv-python-headless==4.12.0.88
+pyclipper==1.4.0
+Shapely==2.1.2
+six==1.17.0
+omegaconf==2.3.0
+antlr4-python3-runtime==4.9.3
+colorlog==6.9.0

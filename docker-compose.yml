@@ -1,0 +1,57 @@
+services:
+  banking-agent:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./data:/app/data
+    environment:
+      BANK_AGENT_HOST: 0.0.0.0
+      BANK_AGENT_PORT: 8090
+      APP_ENV: demo
+      ALLOW_DEMO_CORE: "true"
+      TASK_STORE_BACKEND: sqlite-demo
+      AUDIT_BACKEND: sqlite-hash-chain-demo
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_DSN: postgresql://agent:agent_dev_only@postgres:5432/agent
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health/live')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # 仅用于本地验证生产化依赖契约。不要把下面的开发口令用于生产。
+  redis:
+    image: redis:7-alpine
+    profiles: ["infra"]
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+
+  postgres:
+    image: postgres:16-alpine
+    profiles: ["infra"]
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: agent
+      POSTGRES_USER: agent
+      POSTGRES_PASSWORD: agent_dev_only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent -d agent"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  redis-data:
+  postgres-data:

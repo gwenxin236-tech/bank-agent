@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "client_date": "2026-10-31",
+  "status": "PASS_REAL_MODEL_DAG_BOUNDED",
+  "attempts": 2,
+  "first_attempt": "HTTP200 but schema rejected safely",
+  "second_attempt": "original unmodified proposal accepted and explicitly confirmed in isolated Mock",
+  "provider": "siliconflow",
+  "model": "Qwen/Qwen3.5-35B-A3B",
+  "total_tokens": 989,
+  "calls": [
+    {
+      "reason": "accepted",
+      "metrics": {
+        "attempted": true,
+        "http_status": 200,
+        "usage": {
+          "prompt_tokens": 247,
+          "completion_tokens": 226,
+          "total_tokens": 473
+        },
+        "elapsed_ms": 4274
+      },
+      "catalogue_sha256": "cec8c6dd29f08f359ee2597f04dcd38ccf1398e671f22e248538cd5e581ae027"
+    },
+    {
+      "reason": "accepted",
+      "metrics": {
+        "attempted": true,
+        "http_status": 200,
+        "usage": {
+          "prompt_tokens": 370,
+          "completion_tokens": 146,
+          "total_tokens": 516
+        },
+        "elapsed_ms": 3786
+      },
+      "catalogue_sha256": "cec8c6dd29f08f359ee2597f04dcd38ccf1398e671f22e248538cd5e581ae027"
+    }
+  ],
+  "checks": {
+    "catalogue_exact_approved_tools": true,
+    "no_business_entities_outbound": true,
+    "actual_payload_equals_reviewed_public_catalogue": true,
+    "real_model_http_200": true,
+    "original_supervisor_accepts_untouched_model_output": true,
+    "model_and_preview_have_no_bank_effect": true,
+    "adoption_requires_new_card": true,
+    "adoption_has_no_bank_effect": true,
+    "old_card_rejected": true,
+    "explicit_new_confirmation_success": true,
+    "exact_synthetic_debit_100_cents": true,
+    "duplicate_confirmation_denied": true,
+    "original_audit_chain_valid": true
+  },
+  "daily_database_unchanged": true,
+  "synthetic_debit_cents": 100,
+  "raw_proposal_manually_modified": false,
+  "human_confirmation": false,
+  "arbitrary_cross_business_or_production": false,
+  "record": "data/verification/finalize-20261031/batch04/real-model-dag.json"
+}

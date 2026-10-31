@@ -1,0 +1,593 @@
+{
+  "schema": 1,
+  "client_date": "2026-10-31",
+  "status": "PASS_CURRENT_SOURCE_TEXT_REVIEW_NOT_PUBLICATION_AUTHORIZATION",
+  "reviewed_findings": 81,
+  "block": 0,
+  "categories": {
+    "MOCK_FIXTURE": 3,
+    "PROVIDER_CONTACT": 2,
+    "REGEX_FALSE_POSITIVE": 1,
+    "GENERATED_VALUE_PREFIX": 1,
+    "EXPLICIT_DEMO_FIXTURE": 4,
+    "TEST_FIXTURE": 61,
+    "NUMERIC_FALSE_POSITIVE": 1,
+    "DOCUMENTED_ENDPOINT": 7,
+    "SAFE_INPUT_EXAMPLE": 1
+  },
+  "scope": "allowlisted current text and named synthetic OCR PNG only; excludes Git history, reference Word/PDF/PPT/media, private/state/secrets/model files",
+  "reviewer": "Codex code/context review, not independent human security certification",
+  "git_history_cleared": false,
+  "binary_reference_material_cleared": false,
+  "publication_authorized": false,
+  "local_record": "data/verification/finalize-20261031/release-review/current-adjudication.json",
+  "rows": [
+    {
+      "path": "app/banking_agent.py",
+      "line": 1113,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "MOCK_FIXTURE"
+    },
+    {
+      "path": "app/banking_agent.py",
+      "line": 1118,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "MOCK_FIXTURE"
+    },
+    {
+      "path": "app/banking_agent.py",
+      "line": 1119,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "MOCK_FIXTURE"
+    },
+    {
+      "path": "app/banking_agent.py",
+      "line": 3537,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "PROVIDER_CONTACT"
+    },
+    {
+      "path": "app/identity_service.py",
+      "line": 275,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "REGEX_FALSE_POSITIVE"
+    },
+    {
+      "path": "app/ocr_service.py",
+      "line": 167,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "GENERATED_VALUE_PREFIX"
+    },
+    {
+      "path": "app/speech_adapter.py",
+      "line": 29,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "PROVIDER_CONTACT"
+    },
+    {
+      "path": "scripts/docker_qa.py",
+      "line": 147,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "EXPLICIT_DEMO_FIXTURE"
+    },
+    {
+      "path": "scripts/docker_qa.py",
+      "line": 219,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "EXPLICIT_DEMO_FIXTURE"
+    },
+    {
+      "path": "tests/test_c2_risk_notifications.py",
+      "line": 127,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c2_risk_notifications.py",
+      "line": 289,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c2_risk_notifications.py",
+      "line": 299,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c5_audit_chain.py",
+      "line": 122,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c5_audit_chain.py",
+      "line": 126,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c5_audit_chain.py",
+      "line": 130,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c5_audit_chain.py",
+      "line": 138,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_c6_attack_matrix.py",
+      "line": 61,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 32,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 75,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 128,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 161,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 163,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 175,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_d5_llm_chain.py",
+      "line": 188,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_dag_migration.py",
+      "line": 242,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_dag_migration.py",
+      "line": 248,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_gateway.py",
+      "line": 52,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_handoff_queue.py",
+      "line": 34,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_handoff_queue.py",
+      "line": 127,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_handoff_queue.py",
+      "line": 131,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_identity_service.py",
+      "line": 17,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_live_support.py",
+      "line": 74,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 51,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 56,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 67,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 78,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 155,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 158,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 179,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_llm_adapter.py",
+      "line": 183,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_ocr.py",
+      "line": 98,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_ocr.py",
+      "line": 125,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_operational_readiness.py",
+      "line": 54,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_production_contracts.py",
+      "line": 84,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_production_contracts.py",
+      "line": 85,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_production_contracts.py",
+      "line": 86,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 190,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 209,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 216,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 225,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 228,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 232,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 247,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 410,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 433,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 468,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 472,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_rag.py",
+      "line": 551,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_release_preflight.py",
+      "line": 39,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_release_preflight.py",
+      "line": 41,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_source_release.py",
+      "line": 89,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_source_release.py",
+      "line": 115,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_task_dag.py",
+      "line": 308,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_task_dag.py",
+      "line": 321,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_voice_ui.py",
+      "line": 69,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_voice_ui.py",
+      "line": 92,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_voice_ui.py",
+      "line": 119,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_voice_ui.py",
+      "line": 144,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_voice_ui.py",
+      "line": 200,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "tests/test_voice_ui.py",
+      "line": 267,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "TEST_FIXTURE"
+    },
+    {
+      "path": "docs/assets/P10性能压测验收.json",
+      "line": 1139,
+      "rule": "phone_literal",
+      "severity": "REVIEW",
+      "category": "NUMERIC_FALSE_POSITIVE"
+    },
+    {
+      "path": "docs/C4-家庭授权矩阵.md",
+      "line": 91,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "EXPLICIT_DEMO_FIXTURE"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 39,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 139,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 220,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 223,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 249,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 256,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/GitHub团队协作指南.md",
+      "line": 276,
+      "rule": "email_literal",
+      "severity": "REVIEW",
+      "category": "DOCUMENTED_ENDPOINT"
+    },
+    {
+      "path": "docs/五人团队Agent接入契约.md",
+      "line": 324,
+      "rule": "credential_literal",
+      "severity": "FIXTURE_REVIEW",
+      "category": "EXPLICIT_DEMO_FIXTURE"
+    },
+    {
+      "path": "docs/大模型接入说明.md",
+      "line": 11,
+      "rule": "credential_literal",
+      "severity": "REVIEW",
+      "category": "SAFE_INPUT_EXAMPLE"
+    }
+  ]
+}

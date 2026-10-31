@@ -1,0 +1,3 @@
+# Production-only optional adapters. The demo remains stdlib-only.
+redis>=5.0,<6
+psycopg[binary]>=3.2,<4

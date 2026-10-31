@@ -1,0 +1,21 @@
+.git
+.github
+.DS_Store
+.env
+.env.*
+__pycache__
+*.pyc
+*.sqlite3
+*.zip
+work/
+outputs/
+docs/*.docx
+
+# Optional browser QA tools must not enter the demo image.
+.qa-tools/
+
+# Process material and local state are not part of the runnable demo image.
+_internal/
+submission/
+data/
+*.docx

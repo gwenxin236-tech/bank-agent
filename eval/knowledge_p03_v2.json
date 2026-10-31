@@ -1,0 +1,204 @@
+{
+  "schema": 1,
+  "version": "p03-extension-2026-10-23",
+  "documents": [
+    {
+      "id": "three_color",
+      "title": "本项目三色权限解释",
+      "kind": "rule_explain",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "三色权限",
+        "绿色",
+        "黄色",
+        "红色"
+      ],
+      "text": "本项目由服务端PolicyEngine裁定三色权限。绿色用于已允许的只读查询；黄色操作需要用户明确确认；红色高风险操作通常需要强验证，保护性反诈阻断另按现有策略处理。知识资料和模型回答均不授予业务权限。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "confirmation",
+      "title": "确认卡与银行回执的区别",
+      "kind": "rule_explain",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "操作确认",
+        "确认卡",
+        "明确确认"
+      ],
+      "text": "确认卡用于用户核对办理要素和授权本次操作，不是成功回执。确认后服务端仍核验权限、业务条件和必要的强验证；执行结果以银行工具返回和状态核验为准。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "cooling_off",
+      "title": "演示保护性冷静期",
+      "kind": "rule_explain",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "冷静期",
+        "反诈保护",
+        "诈骗保护"
+      ],
+      "text": "本项目演示的保护性冷静期配置为{{policy.cooling_off_hours}}。反诈流程会识别风险并生成保护性阻断和通知，不会因为知识问答而继续转账。该规则是本项目的演示策略，不代表真实银行的统一规定。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "policy_limits",
+      "title": "演示金额阈值解释",
+      "kind": "rule_explain",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "金额阈值",
+        "小额阈值",
+        "日累计限额"
+      ],
+      "text": "本项目当前小额分级阈值为{{policy.small_transfer_limit_cents}}，演示核心日累计上限为{{policy.daily_transfer_limit_cents}}。金额从服务端同一份配置快照填入；这段说明不能代替PolicyEngine裁决、可用余额检查和核心业务条件校验，也不代表真实银行限额。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "unknown_result",
+      "title": "未知交易结果处理路径",
+      "kind": "process_path",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "未知结果",
+        "结果待核实",
+        "结果不确定"
+      ],
+      "text": "未知结果表示目前没有足够证据确认银行业务终态，不等于成功，也不等于未受理。请核验原请求状态，不要重复提交同一笔资金操作；知识库不会把未知结果改写为成功。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "subscription_layers",
+      "title": "订阅取消的分层含义",
+      "kind": "rule_explain",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "订阅取消",
+        "服务有效期",
+        "扣款授权",
+        "退款状态"
+      ],
+      "text": "本项目区分订阅的服务权益、未来扣款授权和退款。关闭未来扣款授权不自动等于服务立即失效或已退款；具体状态应读取相应工具结果，不能由解释资料推断。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "receipts",
+      "title": "演示记录与正式银行凭证",
+      "kind": "process_path",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "正式回执",
+        "银行凭证",
+        "模拟银行",
+        "电子回单"
+      ],
+      "text": "当前项目使用MockBankCore模拟银行。页面的演示记录和审计记录不是正式银行出具的凭证；本项目知识问答不生成正式电子回单，也不会声称已经接入真实银行核心。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "human_handoff",
+      "title": "本地人工接管的完成边界",
+      "kind": "process_path",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "人工接管",
+        "客服工单",
+        "工单结单"
+      ],
+      "text": "当前人工接管队列是明确标注的本地演示。建单或结单不会执行银行资金操作，不会把未知交易判为成功；没有真人接通证据时，不能将本地建单称为已接通真实客服。",
+      "embedding_allowed": true
+    },
+    {
+      "id": "knowledge_boundary",
+      "title": "知识问答的资料与权限边界",
+      "kind": "rule_explain",
+      "version": "1",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2027-11-01",
+      "patterns": [
+        "知识问答",
+        "资料引用",
+        "知识来源"
+      ],
+      "text": "知识问答仅检索已审核且对当前操作人可见的项目资料，回答附来源。资料不是系统指令、业务授权或账户事实；没有足够资料时拒答。余额、交易状态及其他实时账户事实应走原银行工具入口。",
+      "embedding_allowed": true
+    },
+    {
+      "kind": "product_fact",
+      "version": "snapshot-2026-10-23",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2026-11-02",
+      "embedding_allowed": true,
+      "publisher": "中国银行",
+      "retrieved_at": "2026-10-23",
+      "id": "boc_fixed_deposit",
+      "title": "中国银行整存整取公开产品资料",
+      "patterns": [
+        "整存整取",
+        "定期储蓄",
+        "中国银行存款"
+      ],
+      "text": "中国银行官网对整存整取的说明：开户时约定存期，一次存入本金，到期一次取得本金和利息。到期自动转存按转存时适用的挂牌利率规则办理，首期优惠不代表后续存期继续适用。本资料为官网采集快照，不固定提供利率或承诺收益；实际条款和办理条件应核对银行最新说明。",
+      "source_url": "https://www.boc.cn/pbservice/pb1/200806/t20080625_699.html",
+      "source_excerpt": "本金整笔存入，到期一次支取本息"
+    },
+    {
+      "kind": "product_fact",
+      "version": "snapshot-2026-10-23",
+      "reviewed": true,
+      "access": "public",
+      "readers": [],
+      "valid_until": "2026-11-02",
+      "embedding_allowed": true,
+      "publisher": "中国银行",
+      "retrieved_at": "2026-10-23",
+      "id": "boc_deposit_account",
+      "title": "中国银行定期一本通公开产品资料",
+      "patterns": [
+        "定期一本通",
+        "多个定期账户",
+        "不同定期存款"
+      ],
+      "text": "中国银行官网将定期一本通介绍为集中管理定期存款的账户，可在同一账户下安排人民币及多种外币的定期存款，并查看各笔开立和到期情况。具体币种、期限与利率应以银行最新公告和实际办理条件为准。本资料为官网采集快照，不表示本项目可以代为开户或办理存款。",
+      "source_url": "https://www.boc.cn/pbservice/pb1/200902/t20090219_588012.html",
+      "source_excerpt": "只需一个账户即可同时办理人民币及多种外币定期存款"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "version": "2026-09-20",
+  "keyword_rules": [
+    {"keyword": "安全账户", "reason": "对方要求转入所谓安全账户"},
+    {"keyword": "刷单返现", "reason": "出现刷单返现话术"},
+    {"keyword": "刷单", "reason": "出现刷单话术"},
+    {"keyword": "返现", "reason": "出现返现诱导话术"},
+    {"keyword": "验证码告诉你", "reason": "对方要求提供短信验证码"},
+    {"keyword": "投资导师", "reason": "出现冒充投资导师诱导转账话术"},
+    {"keyword": "高收益稳赚", "reason": "出现高收益稳赚诱导话术"},
+    {"keyword": "保本高收益", "reason": "出现保本高收益诱导话术"},
+    {"keyword": "解冻保证金", "reason": "出现以解冻保证金为由要求转账"},
+    {"keyword": "解除风控", "reason": "出现以解除风控为由要求转账"},
+    {"keyword": "解冻账户", "reason": "出现以解冻账户为由要求转账"},
+    {"keyword": "客服要求转账", "reason": "出现冒充客服要求转账"},
+    {"keyword": "带你赚", "reason": "出现高收益诱导话术"}
+  ],
+  "hotline": "96110"
+}

@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "client_date": "2026-10-30",
+  "status": "PASS_P11_LOCAL_REMOTE_CI_AND_PHYSICAL_HOST_PENDING",
+  "scope": "current working-tree source delivery and fixed linux/amd64 offline runtime; no publication, licensed bank or production certification",
+  "regression": {
+    "full_windows": {
+      "tests": 774,
+      "python": "3.13.5",
+      "skipped": 0,
+      "resource_warnings": 0
+    },
+    "core_linux": {
+      "tests": 761,
+      "python": "3.12.15",
+      "skipped": 0,
+      "resource_warnings": 0
+    },
+    "browser_windows": {
+      "tests": 13,
+      "skipped": 0,
+      "resource_warnings": 0
+    },
+    "minimal_stdlib_plus_pillow_core_linux": {
+      "tests": 761,
+      "skipped": 0,
+      "resource_warnings": 0
+    },
+    "immutable_final_image_no_source_overlay": true,
+    "offline_migration_checks": 53,
+    "identity_migration_checks": 32,
+    "fineract_migration_checks": 25
+  },
+  "cloud": {
+    "status": "PASS_BOUNDED_CLOUD_SAMPLE",
+    "provider": "siliconflow",
+    "model": "Qwen/Qwen3.5-35B-A3B",
+    "requests": 6,
+    "parallelism": 1,
+    "max_output_tokens_per_request": 512,
+    "p50_ms": 1639.975800004322,
+    "p95_ms": 2284.972225002246,
+    "p99_ms": 2356.1944450004494,
+    "total_usage": {
+      "prompt_tokens": 1349,
+      "completion_tokens": 372,
+      "total_tokens": 1721
+    },
+    "automatic_retries": 0,
+    "actual_bill_verified": false,
+    "scope_limits": "six serial requests are a functional/latency sample, not full cloud capacity or a production percentile SLO"
+  },
+  "cloud_main_chain": {
+    "accepted": true,
+    "completed": true,
+    "audit_valid": true,
+    "mock_bank_unchanged": true
+  },
+  "runtime": {
+    "image": {
+      "tag": "bank-agent-offline:t14-20261030-234014-215968",
+      "id": "sha256:42f2234dcd997bdea0faba10d72eae9d2d79969a1a6d74c3161f61e535fb25b2"
+    },
+    "features": {
+      "local_rag": true,
+      "local_reranker": true,
+      "local_ocr": true
+    },
+    "source_assets": 267,
+    "platform": "linux/amd64",
+    "standard_bundle": ".qa-tools/offline-releases/p11-20261030-final",
+    "identity_profile": ".qa-tools/offline-releases/p11-identity-20261030-final",
+    "fineract_profile": ".qa-tools/offline-releases/fineract-p11-20261030-final",
+    "runtime_volumes_exported": false
+  },
+  "source": {
+    "builder": "scripts/source_release.py",
+    "verifier": "scripts/source_release.py verify",
+    "basis": "current tree including uncommitted and untracked source, not HEAD",
+    "manifest": "SOURCE_MANIFEST.json inside final source ZIP",
+    "external_index": ".qa-tools/offline-releases/p11-20261030-handoff-r2/RELEASE_INDEX.json",
+    "publication_authorized": false,
+    "privacy_review": "REVIEW_REQUIRED; source manifest lists redacted cues; excluded files and Git history are not cleared"
+  },
+  "ci": {
+    "workflow": ".github/workflows/ci.yml",
+    "workflow_sha256": "6ced25376b1560c377420df3c11138853dd16d80893eaa14567b2f0c7ad49c78",
+    "jobs": [
+      "core linux/windows Python3.12",
+      "browser linux Node22 Playwright1.64.1",
+      "default container build and network-none channel QA"
+    ],
+    "actions_pinned_by_verified_sha": true,
+    "remote_status": "NOT_RUN_NOT_PUBLISHED",
+    "linux_browser_hosted_runner_status": "PENDING_GITHUB",
+    "online_build_byte_reproducible": false,
+    "default_stdlib_container_local_status": "PASS after explicit tmpfs for QA report writes; network none, root filesystem read-only",
+    "default_container_initial_failure": "first command lacked writable QA report location; retained local log, fixed workflow only"
+  },
+  "repository": {
+    "url": "https://github.com/gwenxin236-tech/bank-agent",
+    "url_evidence": "provided by user, visibility/contents not verified",
+    "remote_configured": false,
+    "committed": false,
+    "pushed": false,
+    "local_read_only_git_access_error": "schannel SEC_E_NO_CREDENTIALS"
+  },
+  "protected": {
+    "git_head": "f9d0cc2351882dd4a3ae5ef0a67ef050ade172fd",
+    "head_unchanged": true,
+    "daily_database_unchanged": true,
+    "member_abi_unchanged": true,
+    "five_deletions_still_absent": true
+  },
+  "retained_limits": [
+    "physical second computer pending; copied directory and network-isolated Docker verified only",
+    "RAG human corpus/OCR real-image corpus pending; retained synthetic RAG failures hold070/hold086/hold087 not rewritten",
+    "P08 human two-page acceptance deferred by user",
+    "independent human TOTP authenticator, native screen reader and varied ASR corpus pending",
+    "licensed bank / official IM and production identity certification not connected",
+    "six cloud samples are not complete cloud load/capacity or verified billing",
+    "P10 performance results retained for its frozen runtime; not rerun as P11 performance",
+    "real API model-generated/free cross-business DAG and competition material timing/playback retain prior pending status"
+  ],
+  "records": {
+    "full": "data/verification/p11-20261030/full-r1.json",
+    "browser": "data/verification/p11-20261030/browser-r1.json",
+    "image_core": "data/verification/p11-20261030/docker-core.json",
+    "minimal_core": "data/verification/p11-20261030/minimal-core.json",
+    "offline": "data/verification/t14-20261030-234339-766598/report.json",
+    "identity": "data/verification/p11-20261030/identity-profile.json",
+    "fineract": "data/verification/p11-20261030/core-profile.json",
+    "cloud": "data/verification/p11-20261030/cloud-sample.json"
+  }
+}

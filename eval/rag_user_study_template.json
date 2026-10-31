@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "provenance": "participant_submitted",
+  "consent_local_processing": true,
+  "samples": [],
+  "instructions": "每位参与者使用p_加4至16位字母数字的匿名编号；自然提问，不含任何真实隐私。每条包含participant_id、submitted_at、question、relevant_ids、expected_type、reviewers（两位不同匿名标注人）。不填入模拟样本冒充真人。"
+}

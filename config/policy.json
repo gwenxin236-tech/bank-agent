@@ -1,0 +1,59 @@
+{
+  "version": "2026-10-21",
+  "principles": [
+    "least_privilege",
+    "explicit_consent",
+    "strong_auth_for_high_risk",
+    "no_fabricated_result"
+  ],
+  "green": [
+    "balance_query",
+    "transaction_query",
+    "bill_analysis",
+    "investment_query",
+    "financial_health"
+  ],
+  "yellow": [
+    "transfer",
+    "subscription_query",
+    "subscription_cancel",
+    "virtual_card_apply"
+  ],
+  "red": [
+    "card_manage",
+    "password_change",
+    "investment_purchase",
+    "investment_redemption"
+  ],
+  "demo_otp": "123456",
+  "daily_transfer_limit_cents": 10000000,
+  "small_transfer_limit_cents": 100000,
+  "max_amount_cents": 1000000000000,
+  "idle_cash_threshold_cents": 10000000,
+  "family_small_transfer_max_cents": 100000,
+  "fraud_new_recipient_threshold_cents": 100000,
+  "cooling_off_hours": 24,
+  "risk_amount_threshold_cents": 100000,
+  "risk_new_recipient_points": 30,
+  "risk_amount_points": 20,
+  "risk_keyword_points": 50,
+  "risk_elderly_points": 20,
+  "risk_rapid_points": 30,
+  "risk_recent_window_minutes": 30,
+  "risk_rapid_transfer_count": 3,
+  "risk_defer_score": 60,
+  "aml_lower_cents": 90000,
+  "aml_transfer_count": 3,
+  "consent_ttl_seconds": 600,
+  "strong_auth_ttl_seconds": 300,
+  "auth_max_attempts": 3,
+  "breaker_failure_threshold": 3,
+  "http_rate_limit": 120,
+  "http_rate_window_seconds": 60,
+  "http_max_body_bytes": 65536,
+  "retry_max_attempts": 3,
+  "retry_base_delay_ms": 100,
+  "retry_max_delay_ms": 5000,
+  "birthday_lock_amount_cents": 100000,
+  "preflight_security_buffer_cents": 100000
+}

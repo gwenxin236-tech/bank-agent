@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "client_date": "2026-10-31",
+  "status": "PASS_LOCAL_ARTIFACT_QA_HUMAN_PLAYBACK_PENDING",
+  "pdf": {
+    "pages": 57,
+    "source_references": 67,
+    "figures": 15,
+    "source_excerpts": 15,
+    "headings_black_bold": 109,
+    "superscript_citations": 405,
+    "pdf_sha256": "1ba5bec3f2d03401767cc1ea06ec4f7ed32aaa8d80069229d60da1a4db18a6b3"
+  },
+  "ppt": {
+    "slides": 12,
+    "notes": 12,
+    "sha256": "625a1aa17ff0eef2e6fe6abf9b31c2685b070af37cbb806809f31622b8cee545",
+    "package_layout_reimport": "PASS",
+    "all_final_slides_visually_reviewed": true,
+    "method": "r4 all pages; r5 changes4/6/9/10; r6 changes8/12; unchanged pixels verified",
+    "validation_record": "data/verification/finalize-20261031/batch02/recording-final/deck-r6-final/validation.json",
+    "native_powerpoint_wps": "PENDING"
+  },
+  "video": {
+    "seconds": 172.2,
+    "frames": 4305,
+    "sha256": "31ad327d3be4a3c30366acfd20a7ab7dd70839ec3531d212acc2fe3954e61f77",
+    "scene_samples_decoded_and_viewed": 11,
+    "checks": 25,
+    "audio": false,
+    "codec": "mp4v",
+    "record": "data/verification/finalize-20261031/batch02/report.json"
+  },
+  "planned_talk_seconds": 290,
+  "planned_total_seconds": 462.2,
+  "human_timing_playback": "PENDING",
+  "platform_receipt": "NO_EVIDENCE",
+  "new_image_container_acceptance": "PENDING_DOCKER_ENGINE",
+  "record": "data/verification/finalize-20261031/batch06/report.json"
+}

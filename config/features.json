@@ -1,0 +1,30 @@
+{
+  "elderly": {
+    "enabled": true,
+    "demo_tool": "elderly_plain_language",
+    "demo_params": {
+      "text": "触发增强认证策略"
+    }
+  },
+  "antifraud": {
+    "enabled": true,
+    "demo_tool": "antifraud_safety_tip",
+    "demo_params": {}
+  },
+  "family": {
+    "enabled": true,
+    "demo_tool": "family_permission_guide",
+    "demo_params": {}
+  },
+  "finance_health": {
+    "enabled": true,
+    "demo_tool": "finance_health_budget",
+    "demo_params": {
+      "income_cents": 100000,
+      "expense_cents": 30000
+    }
+  },
+  "dag": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,8 @@
+# Optional CPU local RAG; approved separately from the stdlib-only base demo.
+# Preparation exports a complete hash-pinned wheel lock for the target platform.
+onnxruntime==1.23.2
+tokenizers==0.22.1
+numpy==2.2.6
+huggingface-hub==0.36.0
+# Explicit because cross-platform pip resolution uses some host environment markers.
+hf-xet==1.2.0

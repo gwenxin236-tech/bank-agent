@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b3b31" />
+  <meta name="description" content="澜银行 AI 智能助理，支持大字和通俗表达" />
+  <title>澜银行 AI 智能助理</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="澜银行首页">
+        <div class="brand-mark">L</div>
+        <div><strong>澜银行</strong><span>AI BANKING AGENT</span></div>
+      </a>
+      <nav class="top-nav" aria-label="主导航">
+        <a class="active" href="#overview">首页</a><a href="#assistant">问银行小助手</a><a href="#activity">服务记录</a><a href="#securityCenter">安全中心</a>
+      </nav>
+      <div class="top-actions">
+        <button class="accessibility-toggle" id="elderToggle" type="button" aria-pressed="false">长辈模式：关</button>
+        <button id="customerServiceBtn" class="customer-service" type="button">一键人工客服</button>
+        <span class="security-pill"><i></i><span id="securityText">安全保护中</span></span>
+        <button class="icon-button" id="auditBtn" aria-label="打开服务记录" title="服务记录">⌁</button>
+        <button class="ghost" id="settingsBtn" type="button" aria-haspopup="dialog">显示与帮助设置</button>
+      </div>
+    </header>
+
+    <main class="main-grid" id="top">
+      <section class="welcome-row" id="overview">
+        <div>
+          <div class="eyebrow">银行小助手 <span class="mode-badge" id="modelMode">规则解析模式</span></div>
+          <h1>把银行的事，<em>简单说。</em></h1>
+          <p>查余额、看消费、帮家人。一句话开始，每一步安心。</p>
+        </div>
+        <div class="date-block"><span>今天</span><b id="todayLabel">2026年9月18日</b><small>演示账户 · 人民币</small></div>
+      </section>
+
+      <section class="elder-help" aria-label="帮助与显示设置">
+        <p id="customerServiceStatus" role="status" aria-live="polite">不懂就点“一键人工客服”，可查看本机工单并与自建坐席交流。这里不是银行官方客服。</p>
+        <button id="newSupportRequestBtn" type="button" aria-describedby="newSupportHint" disabled>发起新一轮求助</button>
+        <small id="newSupportHint">查询确认旧工单已结单后可发起新一轮；结果未知时请重试原请求。</small>
+        <button id="advancedToggle" type="button" aria-expanded="false" aria-controls="securityCenter activity">查看服务记录与安全演示</button>
+      </section>
+      <section id="handoffCardPanel" class="handoff-card hidden" aria-live="polite" aria-labelledby="handoffCardTitle">
+        <div class="handoff-card-head"><div><span class="eyebrow">人工接管</span><h2 id="handoffCardTitle">给人工客服的交接卡</h2></div><span class="handoff-badge">已脱敏</span></div>
+        <p class="handoff-note">这是演示系统生成的办理路径，不是正式银行凭据；人工继续办理前仍需按官方流程核验身份和授权。</p>
+        <div id="handoffCardContent"></div>
+      </section>
+      <section id="elderFraudAlert" class="elder-fraud-alert hidden" role="alert" aria-labelledby="elderFraudTitle" tabindex="-1">
+        <h2 id="elderFraudTitle">请先不要转账</h2>
+        <p id="elderFraudExplanation"></p><p id="elderOfficialHelp"></p><p id="elderHotlineHelp"></p>
+        <button id="fraudHelpBtn" type="button" class="customer-service">请人工帮我核实</button>
+      </section>
+      <section class="overview-cards" aria-label="账户概览">
+        <article class="metric-card balance-card"><div class="metric-label">账户里还有多少钱 <button class="mini-button" id="refreshState" aria-label="刷新账户余额">↻</button></div><div class="balance-value" id="balanceValue">读取中…</div><div class="metric-foot"><span class="positive">● 账户正常</span><span>活期账户 · **** 6222</span></div></article>
+        <article class="metric-card"><div class="metric-label">今天还能转多少钱</div><div class="metric-value" id="limitValue">读取中…</div><div class="progress"><span id="limitProgress"></span></div><div class="metric-foot"><span id="limitHint">系统会自动帮你核对</span><span>每日额度</span></div></article>
+        <article class="metric-card"><div class="metric-label">安全保护</div><div class="safe-level"><span class="safe-icon">✓</span><div><b>已开启</b><small>重要操作会先问你</small></div></div><div class="metric-foot"><span>服务记录已保存</span><span class="secure-dot">●</span></div></article>
+      </section>
+
+      <section class="quick-section">
+        <div class="section-heading"><div><h2>你可以直接点这里</h2><p>也可以在下面用自己的话说</p></div><span class="section-note">不用记按钮名称</span></div>
+        <div class="quick-grid">
+          <button class="quick" data-msg="帮我查一下账户余额" aria-label="查询账户余额"><span class="quick-icon mint">¥</span><b>查余额</b><small>看看账户还有多少钱</small><strong>→</strong></button>
+          <button class="quick" data-msg="帮我看看最近的消费" aria-label="查看最近消费"><span class="quick-icon blue">◒</span><b>看消费</b><small>看看钱花到哪里了</small><strong>→</strong></button>
+          <button class="quick" data-msg="我要转账" aria-label="发起转账"><span class="quick-icon amber">↗</span><b>转一笔钱</b><small>转账前会让你核对</small><strong>→</strong></button>
+          <button class="quick" data-msg="查一下我的订阅" aria-label="查看自动扣费"><span class="quick-icon purple">⌁</span><b>看自动扣费</b><small>看看哪些服务在扣钱</small><strong>→</strong></button>
+          <button class="quick" data-msg="帮我做一次消费体检" aria-label="消费体检"><span class="quick-icon blue">◉</span><b>消费体检</b><small>看看钱花在哪里</small><strong>→</strong></button>
+          <button class="quick" data-msg="家庭共管" aria-label="家庭共管"><span class="quick-icon mint">⌂</span><b>家庭共管</b><small>看看家人授权范围</small><strong>→</strong></button>
+          <button class="quick" data-msg="给安全账户转 5000 元，解除风控" aria-label="反诈守护演示"><span class="quick-icon red">盾</span><b>反诈守护</b><small>遇到可疑转账先停下来</small><strong>→</strong></button>
+        </div>
+      </section>
+
+      <section class="workspace" id="assistant">
+        <div class="chat-card">
+          <div class="card-head"><div class="assistant-title"><span class="assistant-avatar">L</span><div><b>澜小智</b><span>银行小助手 · <i id="assistantStatus">在线</i></span></div></div><span class="trace-label" id="traceLabel">等你说话</span></div>
+          <div class="chat-log" id="chatLog" role="log" aria-live="polite"><div class="message bot"><div class="avatar">L</div><div><div class="bubble">你好，我是澜小智。打字或点“说一说”，告诉我你想办什么。涉及转账，我会先列清金额和收款人，等你确认。</div><div class="time">刚刚</div></div></div></div>
+          <div class="typing hidden" id="typing"><span></span><span></span><span></span><em>正在帮你处理…</em></div>
+          <form class="composer" id="composer"><label class="sr-only" for="messageInput">告诉银行小助手你的需求</label><input id="messageInput" autocomplete="off" maxlength="2000" placeholder="例如：帮我查余额"/><button type="button" class="voice-button" id="voiceBtn" aria-label="语音输入"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M6 11v1a6 6 0 0 0 12 0v-1M12 18v3m-4 0h8"/></svg><span>说一说</span></button><button type="submit" id="sendBtn">发送 <span>⌘↵</span></button></form>
+          <div class="voice-status" id="voiceStatus" aria-live="polite"></div>
+          <button id="ocrBtn" class="ghost" type="button">读图片，先核对再填写</button>
+          <div class="notice"><span>盾</span> 重要操作先让你核对 · 服务记录可回看 · 不懂的地方可以直接问“这是什么意思”</div>
+        </div>
+        <aside class="side-card" id="planPanel" role="region" aria-live="polite" aria-atomic="true" aria-label="本次操作计划和办理结果"><div class="empty-state"><div class="orbit">✦</div><h3>每一步，都由你掌握</h3><p>先看清计划，再确认办理。金额、收款人和结果，都在这里明明白白地展示。</p><div class="empty-hint">可以先试试“查一下我的余额”</div></div></aside>
+      </section>
+
+      <section class="security-center" id="securityCenter" aria-labelledby="securityCenterTitle">
+        <div class="section-heading">
+          <div><div class="eyebrow">离线红队演练 · C6</div><h2 id="securityCenterTitle">安全中心</h2><p>六类攻击逐条实测，查看阻断结果与审计证据。</p></div>
+          <div class="attack-actions"><button class="primary" id="runAttackMatrixBtn" type="button">一键跑全部攻击</button><button class="ghost" id="downloadAttackReportBtn" type="button" disabled>下载 JSON 报告</button></div>
+        </div>
+        <p class="attack-boundary">每条攻击使用独立临时账户与数据库，不影响你的账户。仅验证固定离线语料和模拟核心，不代表真实模型或生产系统已通过安全认证。演练证据随报告下载，不进入主账户审计回放。</p>
+        <div id="attackMatrixSummary" class="attack-summary" role="status" aria-live="polite">正在加载攻击矩阵…</div>
+        <div class="attack-matrix-table-wrap" tabindex="0" role="region" aria-label="攻击矩阵结果，可横向滚动">
+          <table class="attack-matrix-table">
+            <caption class="sr-only">攻击、预期、实际、审计事件与是否阻断</caption>
+            <thead><tr><th scope="col">攻击</th><th scope="col">预期</th><th scope="col">实际</th><th scope="col">审计事件</th><th scope="col">是否阻断</th></tr></thead>
+            <tbody id="attackMatrixBody"><tr><td colspan="5">等待加载矩阵</td></tr></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="activity-section" id="activity"><div class="section-heading"><div><h2>服务记录</h2><p>你刚才办理过的事情会显示在这里</p></div><button class="text-button" id="resetBtn">重置演示账户</button></div><div class="activity-grid"><div class="activity-item"><span class="activity-icon">✓</span><div><b>安全保护已开启</b><small>转账等重要操作会先让你核对</small></div><time>现在</time></div><div class="activity-item"><span class="activity-icon">↗</span><div><b>可以从多个入口使用</b><small>现在先使用网页，之后可接入手机 App 或 IM</small></div><time>系统</time></div><div class="activity-item"><span class="activity-icon">⌁</span><div><b>助手工作方式</b><small id="modeDetail">无需 API Key 也可以完成演示</small></div><time id="modeTime">配置</time></div></div></section>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle"><div class="modal-card"><button class="modal-close" id="closeModal" aria-label="关闭">×</button><div class="modal-icon">盾</div><div class="modal-title" id="authTitle">这笔操作需要再确认</div><p id="authDescription">为了保护你的钱，请输入演示验证码。真实银行会使用短信、刷脸或其他安全方式。</p><input id="otpInput" inputmode="numeric" maxlength="6" placeholder="请输入 6 位验证码" aria-label="验证码"/><div class="modal-actions"><button class="ghost" id="cancelAuth">先不办理</button><button class="primary" id="verifyBtn">验证后继续</button></div><small id="demoOtpHint">正在读取演示验证码…</small></div></div>
+  <div class="drawer hidden" id="auditDrawer" role="dialog" aria-modal="true" aria-labelledby="auditTitle"><div class="drawer-head"><div><b id="auditTitle">审计链回放</b><small>输入 trace_id，按时间顺序回看完整决策链</small></div><button class="ghost" id="closeAudit">关闭</button></div><form class="audit-replay-form" id="auditReplayForm"><label for="auditTraceInput">任务 trace_id</label><div class="audit-replay-controls"><input id="auditTraceInput" autocomplete="off" placeholder="例如 trace_xxx" aria-label="任务 trace_id"/><button class="primary" id="auditReplayBtn" type="submit">回放</button></div></form><div class="audit-summary" id="auditSummary" role="status"></div><div id="auditList"></div></div>
+  <dialog id="transferDialog" class="voice-dialog transfer-dialog" aria-labelledby="transferTitle" aria-describedby="transferScope">
+    <h2 id="transferTitle">先把转账信息说清楚</h2>
+    <p id="transferScope">这是模拟银行转账。请主动选择已核验的演示收款账户并填写金额；提交后只生成计划，不会扣款。真实核心替换点：银行收款人核验及账户选择接口。</p>
+    <p id="transferRequestHint" role="status" aria-live="polite" aria-atomic="true"></p>
+      <div id="recipientDisambiguation" class="recipient-disambiguation hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+    <form id="transferForm">
+      <label for="transferRecipient">转给谁 · 收款账户</label>
+      <select id="transferRecipient" required><option value="">请选择收款人和账户</option></select>
+      <label for="transferAmount">转账金额（元）</label>
+      <input id="transferAmount" type="text" inputmode="decimal" maxlength="16" placeholder="请填写金额，最多两位小数" required pattern="[0-9]+(\.[0-9]{1,2})?"/>
+      <label for="transferNote">备注（选填）</label>
+      <input id="transferNote" maxlength="200" autocomplete="off" placeholder="例如：生活费"/>
+      <div class="voice-actions"><button type="button" class="ghost" id="transferClose">先不转账</button><button type="submit" class="primary" id="transferReview">生成计划，核对信息</button></div>
+    </form>
+    <small>未找到目标账户？请勿选择其他人代替。当前演示不支持任意真实银行卡或自动把“女儿”等称呼绑定到账户，请联系官方银行渠道核验。</small>
+  </dialog>
+
+  <dialog id="settingsDialog" class="voice-dialog" aria-labelledby="settingsTitle" aria-describedby="settingsScope">
+    <h2 id="settingsTitle">显示与帮助设置</h2>
+    <p id="settingsScope">以下为当前浏览器的显示偏好，不改变银行账户、交易权限或卡片状态。</p>
+    <label class="voice-consent"><input id="settingsElderToggle" type="checkbox"/>长辈模式</label>
+    <label class="voice-consent"><input id="settingsVoicePrivacy" type="checkbox"/>语音播报时隐藏金额和账号</label>
+    <h3>本页卡片列表</h3>
+    <p>仅隐藏本列表中的卡片。不挂失、不注销、不删除账户；业务查询、转账核验和审计仍使用完整账户事实。</p>
+    <label class="voice-consent"><input id="showHiddenCards" type="checkbox"/>查看已隐藏卡片并恢复显示</label>
+    <p id="cardDisplayStatus" role="status" aria-live="polite">正在读取卡片列表…</p>
+    <ul id="visibleCardList" aria-label="本页卡片列表"></ul>
+    <h3>帮助与服务入口</h3>
+    <div class="voice-actions settings-links">
+      <button class="ghost" type="button" data-settings-target="activity">服务记录与演示重置入口</button>
+      <button class="ghost" type="button" data-settings-target="securityCenter">安全中心</button>
+      <button class="ghost" type="button" id="settingsAuditBtn">审计链回放</button>
+      <button class="ghost" type="button" id="settingsVoiceBtn">语音输入与本次录音同意</button>
+      <button class="ghost" type="button" id="settingsSupportBtn">本地人工求助</button>
+    </div>
+    <button id="settingsClose" class="primary" type="button">关闭设置</button>
+  </dialog>
+  <dialog id="voiceDialog" class="voice-dialog" aria-labelledby="voiceTitle" aria-describedby="voicePrivacy">
+    <div class="voice-symbol" aria-hidden="true">◖ Ⅰ Ⅱ Ⅰ ◗</div>
+    <div class="eyebrow">VOICE ASSISTANT · 语音助手</div>
+    <h2 id="voiceTitle">您说，我来听</h2>
+    <p id="voicePrivacy">仅用于虚构演示，请勿说出真实卡号、身份证、密码或验证码。离线只在本机计算音频摘要；在线识别须另获本次明确同意，发送去元数据后的标准录音。本应用不保存录音文件，审计只留摘要与同意记录；供应商的数据处理和删除以其政策为准。</p>
+    <label class="voice-consent"><input type="checkbox" id="voiceConsent"/><span id="voiceConsentText">请先查看本次本机处理或云端识别模式</span></label>
+    <p id="voiceDialogStatus" role="status" aria-live="polite" aria-atomic="true"></p>
+    <label class="voice-consent voice-privacy"><input type="checkbox" id="voicePrivacyToggle" role="switch" aria-checked="true"/>语音播报时隐藏金额和账号（公共场景建议开启）</label>
+    <div class="voice-actions"><button id="voiceCancel" class="ghost" type="button">取消 / 关闭</button><button id="voiceStart" class="primary" type="button" disabled>开始录音</button><button id="voiceStop" class="primary hidden" type="button">完成录音</button></div>
+    <small>识别后先核对文字，再由您发送。录音不会自动转账。</small>
+  </dialog>
+  <dialog id="ocrDialog" class="voice-dialog ocr-dialog" aria-labelledby="ocrTitle" aria-describedby="ocrPrivacy">
+    <h2 id="ocrTitle">核对图片中的转账信息</h2>
+    <p id="ocrPrivacy">图片仅在本机识别，不上传外部服务。请先遮住真实卡号、证件号、密码或验证码。识别结果可能出错，不是银行回执。</p>
+    <label for="ocrFile">选择 PNG 或 JPEG 图片（最多2MB）</label><input id="ocrFile" type="file" accept="image/png,image/jpeg"/>
+    <label class="voice-consent"><input id="ocrConsent" type="checkbox"/>同意本次在本机识别图片</label>
+    <button id="ocrExtract" type="button" class="primary" disabled>识别图片</button>
+    <p id="ocrStatus" role="status" aria-live="polite"></p>
+    <div id="ocrResult" hidden>
+      <div class="ocr-preview"><img id="ocrPreview" alt="本次待核对图片"/><svg id="ocrBoxes" aria-label="识别文字的位置"></svg></div>
+      <ul id="ocrLines" aria-label="识别位置与置信度"></ul><ul id="ocrFlags"></ul>
+      <label for="ocrRecipient">收款人（请核对，可修正）</label><input id="ocrRecipient" maxlength="32" autocomplete="off"/>
+      <label for="ocrAmount">金额（元，请核对，可修正）</label><input id="ocrAmount" inputmode="decimal" maxlength="16" autocomplete="off"/>
+      <label class="voice-consent"><input id="ocrReviewed" type="checkbox"/>我已对照图片核对并修正收款人和人民币金额</label>
+      <label id="ocrAckLabel" class="voice-consent" hidden><input id="ocrFlagsAck" type="checkbox"/>我已处理并确认上述低置信度、冲突或账户核验提示</label>
+      <button id="ocrReview" type="button" class="primary" disabled>仅填入草稿，暂不办理</button>
+    </div>
+    <button id="ocrClose" class="ghost" type="button">关闭</button>
+    <small>填写草稿不会扣款。后续仍由你发送，并按原流程核对计划、确认及必要的身份验证。图片和识别原文不写入审计。</small>
+  </dialog>
+  <div id="a11yStatus" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+  <style>
+    #settingsDialog{box-sizing:border-box}#settingsDialog ul{padding-left:20px}#settingsDialog li{margin:12px 0;overflow-wrap:anywhere}#settingsDialog li button{display:block;max-width:100%;margin-top:8px;padding:10px;white-space:normal}.settings-links{flex-wrap:wrap;justify-content:flex-start}.settings-links button{max-width:100%;white-space:normal}#newSupportRequestBtn{padding:8px;white-space:normal}#settingsDialog .voice-consent{margin:12px 0}
+    .handoff-card{margin:0 0 28px;padding:22px 24px;background:linear-gradient(135deg,#fff8ed,#fff);border:1px solid #f0d7a7;border-radius:18px;box-shadow:0 10px 30px rgba(133,91,25,.08)}
+    .handoff-card.hidden{display:none}.handoff-card-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.handoff-card h2{margin:2px 0 0;font-size:20px}.handoff-badge{padding:6px 10px;border-radius:999px;background:#fff0d2;color:#8b5d18;font-size:12px;font-weight:700}.handoff-note{margin:10px 0 16px;color:#735f43;font-size:13px;line-height:1.7}.handoff-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.handoff-block{padding:13px 15px;background:#fff;border:1px solid #f0e5d2;border-radius:12px}.handoff-block h3{margin:0 0 8px;font-size:13px;color:#765521}.handoff-block p,.handoff-block li{font-size:13px;line-height:1.65;margin:0;color:#38443d}.handoff-block ul{padding-left:18px;margin:0}.handoff-block small{display:block;color:#849089;margin-top:6px}@media(max-width:720px){.handoff-grid{grid-template-columns:1fr}}
+  </style>
+  <script src="/static/app.js"></script>
+</body>
+</html>

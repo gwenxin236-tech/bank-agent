@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "notice": "离线实名/会话替身，不是真实登录认证。生产替换为可信身份网关、账户核心和本人授权服务。",
+  "accounts": [
+    {"user_id": "family-father-demo", "name": "父亲", "device_id": "father-device", "opening_cents": 2000000, "is_elderly": true, "demo_session": "demo-father-session"},
+    {"user_id": "family-daughter-demo", "name": "女儿", "device_id": "daughter-device", "opening_cents": 300000, "is_elderly": false, "demo_session": "demo-daughter-session"},
+    {"user_id": "family-mother-demo", "name": "母亲", "device_id": "mother-device", "opening_cents": 1500000, "is_elderly": true, "demo_session": "demo-mother-session"}
+  ],
+  "guardianships": [
+    {"grant_id": "grant-daughter-father", "guardian_id": "family-daughter-demo", "subject_id": "family-father-demo", "authorization_type": "limited_transfer", "daily_limit_cents": 100000, "valid_from": "2026-01-01T00:00:00+00:00", "expires_at": "2099-12-31T23:59:59+00:00", "revoked": false},
+    {"grant_id": "grant-daughter-mother", "guardian_id": "family-daughter-demo", "subject_id": "family-mother-demo", "authorization_type": "read_only", "daily_limit_cents": 0, "valid_from": "2026-01-01T00:00:00+00:00", "expires_at": "2099-12-31T23:59:59+00:00", "revoked": false}
+  ]
+}
