@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "project_name": "银伴——银行智能服务助手",
+  "status": "PASS_FOUR_REQUIRED_SUBMISSION_FILES",
+  "local_regression": {
+    "tests": 974,
+    "core": 948,
+    "browser": 26,
+    "skipped": 0,
+    "resource_warnings": 0
+  },
+  "requirements": {
+    "technical_pdf_max_bytes": 50000000,
+    "presentation_max_bytes": 80000000,
+    "source_zip_max_bytes": 300000000,
+    "security_pdf_max_bytes": 50000000
+  },
+  "introduction_characters": 179,
+  "technical": {
+    "path": "submission/银伴——银行智能服务助手_技术文档.pdf",
+    "pages": 63,
+    "sha256": "96914ef1642cbd3c83d0a450fc49249be59f8e45b31d71bcd1aee155ac034dab",
+    "bytes": 1673007,
+    "chapter11_removed": true,
+    "cover_requested_lines_removed": true,
+    "cover_header": "银伴——银行智能服务助手"
+  },
+  "presentation": {
+    "path": "submission/银伴——银行智能服务助手_答辩_v2.pptx",
+    "slides": 12,
+    "sha256": "1154b31cfbc55d68bc155c028fbd02a12088a3a35803017b266868c34906438c",
+    "bytes": 738947,
+    "planned_talk_seconds": 290,
+    "optional_video_included": false
+  },
+  "security": {
+    "path": "submission/银伴——银行智能服务助手_安全自评报告.pdf",
+    "pages": 5,
+    "sha256": "b02c1c67f5ea0fe4e2f2710d4175e5b883002cd28b3f4f4f95ac138101a26148",
+    "bytes": 225979,
+    "permission_and_known_risks_present": true
+  },
+  "video": {
+    "optional": true,
+    "submitted": false,
+    "reason": "prioritize four mandatory files; old-brand video not submitted"
+  },
+  "source_evidence": "docs/assets/银伴更名源码验收.json",
+  "publication": "user authorized GitHub update after files delivered; actual receipt recorded outside this snapshot",
+  "new_dependencies": false,
+  "cloud_api_calls": 0
+}

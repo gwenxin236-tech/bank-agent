@@ -31,7 +31,7 @@ const safeEnv={...process.env};for(const name of Object.keys(safeEnv))if(name.en
 const server=spawn(python,['-u','-c',demoBootstrap],{cwd:root,env:{...safeEnv,
  BANK_AGENT_DB_PATH:path.join(db,'demo.sqlite3'),BANK_AGENT_OFFLINE:'1',BANK_SERVICE_MODE:'mock',APP_ENV:'demo',VOICE_ENABLED:'0',
  BANK_AGENT_DEMO_ADMIN_TOKEN:'',RECORDING_OPERATOR_TOKEN:operatorToken,PYTHONDONTWRITEBYTECODE:'1',PYTHONIOENCODING:'utf-8',
- PYTHONPATH:[path.join(root,'.qa-tools/local-ocr/windows-site'),path.join(root,'app')].join(path.delimiter),
+ PYTHONPATH:[process.env.T16_QA_SITE||path.join(root,'.qa-tools/local-ocr/windows-site'),path.join(root,'app')].join(path.delimiter),
  RAG_EMBEDDING_BACKEND:'local',RAG_LOCAL_MODEL_DIR:path.join(root,'models/rag'),RAG_USE_MODEL:'0',RAG_USE_RERANKER:'1',RAG_RERANKER_DIR:path.join(root,'models/reranker'),
  OCR_ENABLED:'1',OCR_MODEL_DIR:path.join(root,'models/ocr'),IDENTITY_MODE:'demo'},stdio:['pipe','pipe','pipe']});
 const serverExit=new Promise(resolve=>server.once('exit',resolve));

@@ -61,7 +61,7 @@ SOURCES = {
  'S22': ('app/llm_adapter.py', 'class LLMConfig:', '可选模型受限输出与文本外发边界'),
  'S23': ('app/static/app.js', 'function renderCardDisplay()', '显示设置、隐藏/恢复、新轮求助与前端交互'),
  'S24': ('docs/E7B适老化验收.md', '## 5.', '真实读屏仍需人工走查；语音实现app/speech_adapter.py'),
- 'S25': ('docs/assets/提交日源码验收.json', '"current_full_windows":', '提交日互补分组回归；默认容器与完整AI镜像分开'),
+ 'S25': ('docs/assets/银伴更名源码验收.json', '"current_full_windows":', '提交日互补分组回归；默认容器与完整AI镜像分开'),
  'S26': ('docs/E6边界测试矩阵.md', '## T01-T25', '正常/异常测试映射；tests/含各专项实现'),
  'S27': ('docs/需求追踪矩阵.md', '## L2', '官方交付要求、分层与未验收项'),
  'S28': ('README.md', '#', '运行方式、功能演示与工程边界'),
@@ -200,14 +200,12 @@ class Cover(Flowable):
         c, w, h = self.canv, self.width, self.height
         c.setFillColor(INK); c.setFont('Heading',10)
         c.drawString(0,h-5,'人工智能赛道')
-        c.drawRightString(w,h-5,'竞赛离线原型 / 提交日集成封版 · 2026-11-01')
+        c.drawRightString(w,h-5,'银伴——银行智能服务助手')
         c.setFillColor(INK); c.setFont('Heading',55)
         c.drawString(32,h*.59,'技术文档')
         c.setFillColor(INK); c.setFont('Heading',23)
-        c.drawString(32,h*.53,'澜银行 AI 智能体')
-        c.setFont('Heading',12); c.drawString(32,h*.48,'自然语言理解、多领域核对与受控银行任务执行')
+        c.drawString(32,h*.53,'银伴——银行智能服务助手')
         c.setFont('Heading',10.5); c.setFillColor(INK)
-        c.drawString(32,h*.40,'当前工作区实现快照 / 架构、算法、安全与验证')
         c.drawString(32,h*.34,'项目负责人：宫文馨')
         c.drawString(32,h*.30,'团队成员：董有轩、李浩林、郭嘉乐、李苏润')
         for offset in [0,23,46]:
@@ -248,7 +246,7 @@ def markup(text, emphasis=True):
 
 
 def build(source, output, records, font_dir):
-    material_evidence(ROOT, json.loads((ROOT/'docs/assets/提交日源码验收.json').read_text(encoding='utf-8')))
+    material_evidence(ROOT, json.loads((ROOT/'docs/assets/银伴更名源码验收.json').read_text(encoding='utf-8')))
     fonts(font_dir)
     text=source.read_text(encoding='utf-8')
     rows=source_records()
@@ -287,12 +285,12 @@ def build(source, output, records, font_dir):
     }
     width,height=A4; margin=46; content_width=width-2*margin
     doc=TechnicalDoc(str(output),pagesize=A4,leftMargin=margin,rightMargin=margin,
-                     topMargin=44,bottomMargin=43,title='澜银行 AI 智能体技术文档',
-                     author='澜银行 AI 智能体项目',subject='竞赛离线Mock架构、算法、安全与验证')
+                     topMargin=44,bottomMargin=43,title='银伴——银行智能服务助手技术文档',
+                     author='银伴——银行智能服务助手项目',subject='竞赛离线Mock架构、算法、安全与验证')
     def footer(c,d):
         if d.body_start is None: return
         c.saveState();c.setFont('Body',8);c.setFillColor(colors.HexColor('#64756f'))
-        c.drawString(margin,22,'澜银行 AI 智能体 · 技术文档')
+        c.drawString(margin,22,'银伴——银行智能服务助手 · 技术文档')
         c.drawCentredString(width/2,22,str(d.page-d.body_start))
         c.drawRightString(width-margin,22,'竞赛离线 Mock 实现')
         c.restoreState()
@@ -506,7 +504,7 @@ def main():
     parser.add_argument('--font-dir',type=Path,default=Path('C:/Windows/Fonts'))
     parser.add_argument('--records',type=Path,default=ROOT/'data/verification/t21-20261022')
     args=parser.parse_args()
-    build(ROOT/'docs/技术文档.md',ROOT/'submission/澜银行AI智能体_技术文档.pdf',
+    build(ROOT/'docs/技术文档.md',ROOT/'submission/银伴——银行智能服务助手_技术文档.pdf',
           args.records,args.font_dir)
 
 

@@ -5,15 +5,15 @@
   "source_evidence": "docs/assets/提交日源码验收.json",
   "introduction": {
     "path": "submission/作品简介.txt",
-    "non_whitespace_characters": 175,
-    "including_newline": 176,
-    "sha256": "c11f09025fdfc001b7b3fcf9bcaae8041df8e7d0807889246de481928cc4d7c5"
+    "non_whitespace_characters": 179,
+    "including_newline": 180,
+    "sha256": "a9acee3eea9705a5b0056729c64fc3d261253b5fb213e17a44ab80031d92ff36"
   },
   "pdf": {
-    "path": "submission/澜银行AI智能体_技术文档.pdf",
-    "sha256": "537df59ebbc7b298e6f01f4f27072fd5201aadcc761793719235749d1ea9dc5c",
-    "bytes": 1970027,
-    "pages": 64,
+    "path": "submission/银伴——银行智能服务助手_技术文档.pdf",
+    "sha256": "858e0383bc3340eccb84decfabcbf208dea81d9991801d2ec24f6b6a4248a379",
+    "bytes": 1673007,
+    "pages": 63,
     "source_references": 74,
     "stale_reference_hashes": [],
     "headings": 121,
@@ -28,18 +28,18 @@
     },
     "full_page_render_directory": "private verification/pdf-final/render-r3",
     "visual_review": "All 64 final pages rendered again; pixel-identical to individually sampled and full contact-sheet reviewed prior revision. Only cited source-version receipts and PDF metadata refreshed.",
-    "rendered_pages": 64,
+    "rendered_pages": 63,
     "pixel_identical_after_reference_correction": true
   },
   "presentation": {
-    "path": "submission/澜银行AI智能体_答辩_v2.pptx",
-    "sha256": "ba236c6822d0cb448ae5dbea63d6ad06565cf0b72ae38438ec205e67607797a2",
-    "bytes": 739363,
+    "path": "submission/银伴——银行智能服务助手_答辩_v2.pptx",
+    "sha256": "6f8af3d411992d9d9dba485f337a9a562f2097b298ce922e8092cd78fd81d0fe",
+    "bytes": 738205,
     "slides": 12,
     "speaker_notes": 12,
     "speech_and_nonspoken_citations_separated": true,
     "planned_talk_seconds": 290,
-    "combined_with_video_seconds": 543.56,
+    "combined_with_video_seconds": 550.8,
     "speech_characters": 646,
     "estimated_speech_seconds_at_180_cpm": 215.33333333333334,
     "human_rehearsal_measured": false,
@@ -49,39 +49,29 @@
     "geometry_findings": 0
   },
   "video": {
-    "path": "submission/澜银行AI智能体_演示.mp4",
+    "path": "submission/银伴——银行智能服务助手_演示.mp4",
     "status": "PASS_H264_AAC_FULL_DECODE_AND_BROWSER_PLAYBACK",
-    "frames": 6339,
+    "frames": 6520,
     "fps": 25.0,
-    "duration_seconds": 253.56,
-    "container_duration_seconds": 253.561927,
-    "audio_pcm_seconds": 253.56,
+    "duration_seconds": 260.8,
+    "container_duration_seconds": 260.806553,
+    "audio_pcm_seconds": 260.8,
     "audio": true,
     "codec": "H.264/AVC + AAC",
     "faststart": true,
-    "bytes": 66631378,
-    "sha256": "e1d9f3f497d0cebf0fa6810ed60fffdd121cd5ad511787d4cc82738d36e82421",
+    "bytes": 68513317,
+    "sha256": "4a547727ab9e8189416c5c55e9ab6623ef856aa16e3661eb40d6710d5ac8e61a",
     "browser": {
-      "duration": 253.561927,
+      "duration": 260.806553,
       "readyState": 4,
       "error": null,
-      "audio_rms_peak": 0.11588693987947819,
-      "positions": [
-        {
-          "time": 127.239201,
-          "error": null,
-          "ready": 4
-        },
-        {
-          "time": 248.9696,
-          "error": null,
-          "ready": 4
-        }
-      ],
+      "playing_time_mid": 132.318,
+      "seek_to_end_ok": true,
       "playing": true
     },
     "scenes": 17,
-    "cloud_calls": 0
+    "cloud_calls": 0,
+    "rerecord_note": "2026-11-01 renamed-UI re-recording (17 scenes); local Huihui narration; playback/seek/audio validated in browser"
   },
   "repository": {
     "url": "https://github.com/gwenxin236-tech/bank-agent",
@@ -101,5 +91,20 @@
     "competition portal receipt"
   ],
   "default_source_deployment": "SEE_FINAL_DELIVERY_INDEX",
-  "complete_ai_offline_images": "NOT_REBUILT_CURRENT_DOCKER_UNAVAILABLE"
+  "complete_ai_offline_images": "NOT_REBUILT_CURRENT_DOCKER_UNAVAILABLE",
+  "rename_20261101": {
+    "date": "2026-11-01",
+    "action": "project renamed 澜银行AI智能体 -> 银伴——银行智能服务助手",
+    "rebuilt": [
+      "technical PDF (63 pages, summary chapter removed per owner request)",
+      "PPT slide text (13 runs)",
+      "source release ZIP (source_release.py, 327 files)",
+      "demo video (17 scenes re-recorded on renamed UI, 260.80s)"
+    ],
+    "unchanged_content": [
+      "安全自评报告.md",
+      "测试及验收说明.md",
+      "部署说明.md"
+    ]
+  }
 }
