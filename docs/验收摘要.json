@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "scope": "PR1 local integration; complete965tests via existing core/browser partitions; earlier full timeout retained",
+  "scope": "Local965test business acceptance retained; publicationCI diagnostics add2tests; remote live results follow links",
   "command": "Sequential existing core and browser CI jobs; same source, disjoint complete coverage",
   "status": "PASS_PARTITIONED_REGRESSION",
   "tests_run": 965,
@@ -1867,6 +1867,16 @@
     "workflow": "https://github.com/gwenxin236-tech/bank-agent/actions/workflows/ci.yml",
     "remote_status": "Follow live PR andActions; local acceptance is not remote proof",
     "preserve_member_history": true,
-    "force_push": false
+    "force_push": false,
+    "ci_diagnostic": {
+      "current_discovered_tests": 967,
+      "added_tests": 2,
+      "targeted_tests_passed": 17,
+      "record": "data/verification/pr1-integration-20261101/ci-progress-final-green.log",
+      "suite_timeout_seconds": 900,
+      "core_single_test_stall_seconds": 120,
+      "business_code_changed": false,
+      "remote_ci": "PENDING"
+    }
   }
 }

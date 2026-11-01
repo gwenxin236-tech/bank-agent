@@ -15,6 +15,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 import warnings
 
@@ -46,6 +48,61 @@ def acceptable(success, count, skipped, resource_warnings, unchanged):
     return bool(success and count > 0 and skipped == 0 and resource_warnings == 0 and unchanged)
 
 
+def run_suite(suite, output, stall_seconds=0):
+    """A stalled CI worker fails; diagnostics contain locations, never locals."""
+    output = Path(output)
+    progress = output.with_suffix('.progress.jsonl')
+    lock, stop = threading.Lock(), threading.Event()
+    state = {'active': None, 'started': 0.0, 'completed': 0}
+
+    class Result(unittest.TextTestResult):
+        def startTest(self, test):
+            with lock:
+                state.update(active=test.id(), started=time.monotonic())
+            super().startTest(test)
+
+        def stopTest(self, test):
+            with lock:
+                elapsed = time.monotonic() - state['started']
+                state['completed'] += 1
+                state['active'] = None
+                with progress.open('a', encoding='utf-8') as stream:
+                    stream.write(json.dumps({'test': test.id(), 'seconds': round(elapsed, 4)}) + '\n')
+            super().stopTest(test)
+
+    def watch():
+        while not stop.wait(min(1.0, stall_seconds / 4)):
+            with lock:
+                elapsed = time.monotonic() - state['started']
+                if state['active'] is None or elapsed < stall_seconds:
+                    continue
+                threads = []
+                for identifier, frame in sys._current_frames().items():
+                    frames = []
+                    while frame:
+                        frames.append({'file': frame.f_code.co_filename,
+                                       'line': frame.f_lineno, 'function': frame.f_code.co_name})
+                        frame = frame.f_back
+                    threads.append({'id': identifier, 'frames': frames})
+                report = {'status': 'FAIL', 'error': 'single test made no completion progress',
+                          'active_test': state['active'], 'elapsed_seconds': elapsed,
+                          'completed_tests': state['completed'], 'threads': threads}
+                output.write_text(json.dumps(report, ensure_ascii=True, indent=2), encoding='utf-8')
+                # Only the isolated test worker is stopped, never a bank process.
+                os._exit(124)
+
+    thread = None
+    if stall_seconds > 0:
+        thread = threading.Thread(target=watch, name='ci-test-watchdog', daemon=True)
+        thread.start()
+    try:
+        return unittest.TextTestRunner(verbosity=2, resultclass=Result).run(suite)
+    finally:
+        stop.set()
+        if thread is not None:
+            thread.join(timeout=2)
+
+
 def safe_environment(original, database):
     env = dict(original)
     for key in list(env):
@@ -68,7 +125,10 @@ def worker(scope, output):
         warnings.simplefilter('always', ResourceWarning)
         discovered = list(leaves(unittest.defaultTestLoader.discover(str(ROOT / 'tests'))))
         selected, excluded = select(discovered, scope)
-        result = unittest.TextTestRunner(verbosity=2).run(unittest.TestSuite(selected))
+        stall = int(os.getenv('BANK_CI_TEST_TIMEOUT_SECONDS', '0'))
+        if not 0 <= stall <= 900:
+            raise ValueError('invalid CI test timeout')
+        result = run_suite(unittest.TestSuite(selected), output, stall)
         module = sys.modules.get('banking_agent')
         if module is not None:
             module.runtime.recovery_scheduler.stop()

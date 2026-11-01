@@ -35,6 +35,8 @@ jobs:
           git diff --check
           python -m compileall -q app scripts tests
       - name: Core and real subprocess recovery, zero skips
+        env:
+          BANK_CI_TEST_TIMEOUT_SECONDS: '120'
         run: python scripts/ci_verify.py --scope core --output data/verification/ci/core.json
       - name: Existing demo readiness preflight
         run: python scripts/preflight.py
