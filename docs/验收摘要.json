@@ -890,7 +890,7 @@
     "docker_status": "PASS",
     "docker_checks": 53,
     "docker_record": "data/verification/t14-20261024-094457-003033/report.json",
-    "bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P03P04 20261024 r5",
+    "bundle": ".qa-tools\\offline-releases\\迁移复验 P03P04 20261024 r5",
     "image": {
       "tag": "bank-agent-offline:t14-20261024-094128-968702",
       "id": "sha256:b865ecf8c2ea708aec70281375591ca168e8bc7c057acb3be44ef09da04989cd"
@@ -918,7 +918,7 @@
       "tag": "bank-agent-offline:t14-20261024-144904-405337",
       "id": "sha256:0cd2de00d13bd153021b8a12d221443185003408d7dc0e5b1eea9a23b2e5a3c9"
     },
-    "bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P05 20261024",
+    "bundle": ".qa-tools\\offline-releases\\迁移复验 P05 20261024",
     "live_cloud_asr": "NOT_TESTED",
     "physical_microphone": "NOT_TESTED",
     "physical_second_host": "NOT_TESTED",
@@ -955,7 +955,7 @@
       "tag": "bank-agent-offline:t14-20261024-180434-548368",
       "id": "sha256:5c4265819d83d4206b623e4092ce061101ac4dbec31f9ed89c3fdf6f11536f4c"
     },
-    "bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P06 20261024",
+    "bundle": ".qa-tools\\offline-releases\\迁移复验 P06 20261024",
     "features": {
       "local_rag": true,
       "local_reranker": true,
@@ -982,7 +982,7 @@
       "tag": "bank-agent-offline:t14-20261024-183507-329275",
       "id": "sha256:a00ef3e683963082bad129223187c874747d7e913a8b9ebba8626e6a11a87ed6"
     },
-    "bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P07 20261024",
+    "bundle": ".qa-tools\\offline-releases\\迁移复验 P07 20261024",
     "source_assets_current": 251,
     "features": {
       "local_rag": true,
@@ -1036,10 +1036,10 @@
       "tag": "bank-agent-offline:t14-20261024-211348-058436",
       "id": "sha256:c1da2bd558bc92febacc5ab089205e7c7a8bf1163e7387593b24303b5f90d5b8"
     },
-    "standard_bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\p08-20261024-final-r2",
-    "standard_migration_copy": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P08 20261024",
-    "optional_core_bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\fineract-p08-20261024-final-r2",
-    "core_migration_copy": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\核心迁移复验 P08 20261030",
+    "standard_bundle": ".qa-tools\\offline-releases\\p08-20261024-final-r2",
+    "standard_migration_copy": ".qa-tools\\offline-releases\\迁移复验 P08 20261024",
+    "optional_core_bundle": ".qa-tools\\offline-releases\\fineract-p08-20261024-final-r2",
+    "core_migration_copy": ".qa-tools\\offline-releases\\核心迁移复验 P08 20261030",
     "core_profile_checks": 25,
     "human_acceptance": "PENDING_HUMAN_USER_DEFERRED",
     "human_checked": false,
@@ -1073,10 +1073,10 @@
       "id": "sha256:9ea848d2cbd5e42efa1acb32bac5718b8944eaa5a5369ade188226e74af021f7"
     },
     "source_assets_current": 260,
-    "standard_bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\p09-20261030-final-r2",
-    "standard_migration_copy": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P09 20261030 r2",
-    "identity_profile": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\p09-identity-20261030-final-r2",
-    "identity_profile_migration": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\身份迁移复验 P09 20261030 r2",
+    "standard_bundle": ".qa-tools\\offline-releases\\p09-20261030-final-r2",
+    "standard_migration_copy": ".qa-tools\\offline-releases\\迁移复验 P09 20261030 r2",
+    "identity_profile": ".qa-tools\\offline-releases\\p09-identity-20261030-final-r2",
+    "identity_profile_migration": ".qa-tools\\offline-releases\\身份迁移复验 P09 20261030 r2",
     "default_mode": "DEMO",
     "optional_mode": "SELF_HOSTED",
     "methods": [
@@ -1156,8 +1156,8 @@
       "tag": "bank-agent-offline:t14-20261030-223019-762974",
       "id": "sha256:41f179bfe1371caae3d32aa9bb7251fdf6743d2b1c0267af8b713b491cf0ceb2"
     },
-    "bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\p10-20261030-final",
-    "migration_bundle": "C:\\Users\\gwx\\Desktop\\bank_agent\\银行ai智能体app\\.qa-tools\\offline-releases\\迁移复验 P10 20261030",
+    "bundle": ".qa-tools\\offline-releases\\p10-20261030-final",
+    "migration_bundle": ".qa-tools\\offline-releases\\迁移复验 P10 20261030",
     "source_assets_current": 264,
     "thresholds_unchanged": true,
     "database_storage": "owned isolated Linux Docker volume, not tmpfs",
@@ -1885,5 +1885,16 @@
         "status": "REMOTE_PENDING"
       }
     }
+  },
+  "current_delivery": {
+    "basis": "docs/assets/提交日源码验收.json",
+    "regression_tests": 974,
+    "member_pr1_merged_commit": "5a1a4ce7eb1f6c273888869c1fca0475e87c6060",
+    "repository_public": true,
+    "subscription_state_confirmation_bypass": "FIXED_AND_REGRESSION_TESTED",
+    "video_codec": "H.264/AVC + AAC",
+    "video_seconds": 253.561927,
+    "human_timing_and_native_ppt": "NO_COMPLETION_EVIDENCE",
+    "final_commit_ci_and_hashes": "final external delivery index"
   }
 }

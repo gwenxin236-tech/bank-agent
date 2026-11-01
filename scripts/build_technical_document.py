@@ -61,7 +61,7 @@ SOURCES = {
  'S22': ('app/llm_adapter.py', 'class LLMConfig:', '可选模型受限输出与文本外发边界'),
  'S23': ('app/static/app.js', 'function renderCardDisplay()', '显示设置、隐藏/恢复、新轮求助与前端交互'),
  'S24': ('docs/E7B适老化验收.md', '## 5.', '真实读屏仍需人工走查；语音实现app/speech_adapter.py'),
- 'S25': ('docs/assets/N16发行验收.json', '"current_full_windows":', '当前源码完整回归；镜像未验与旧发布记录分开'),
+ 'S25': ('docs/assets/提交日源码验收.json', '"current_full_windows":', '提交日互补分组回归；默认容器与完整AI镜像分开'),
  'S26': ('docs/E6边界测试矩阵.md', '## T01-T25', '正常/异常测试映射；tests/含各专项实现'),
  'S27': ('docs/需求追踪矩阵.md', '## L2', '官方交付要求、分层与未验收项'),
  'S28': ('README.md', '#', '运行方式、功能演示与工程边界'),
@@ -109,6 +109,8 @@ SOURCES = {
  'S70': ('app/payment_tasks.py', 'def resume_payment(', '原任务重准备、版本检查和新确认'),
  'S71': ('app/action_effects.py', 'def build_transfer_contract(', '单笔效果范围和原确认绑定'),
  'S72': ('docs/原型评测与真人验收.md', '## 2026-10-31', '当前原型/平台负载与真实样本待验'),
+ 'S73': ('tests/test_d1_security.py', 'def test_state_never_preloads_yellow_subscription_data(', '状态刷新不预读黄色订阅，确认后只读查询'),
+ 'S74': ('scripts/finalize_competition_video.py', 'def finalize(', '本地旁白、H.264/AAC与faststart；无外发'),
 }
 
 
@@ -198,7 +200,7 @@ class Cover(Flowable):
         c, w, h = self.canv, self.width, self.height
         c.setFillColor(INK); c.setFont('Heading',10)
         c.drawString(0,h-5,'人工智能赛道')
-        c.drawRightString(w,h-5,'竞赛离线原型 / N16交付修订 · 2026-11-01')
+        c.drawRightString(w,h-5,'竞赛离线原型 / 提交日集成封版 · 2026-11-01')
         c.setFillColor(INK); c.setFont('Heading',55)
         c.drawString(32,h*.59,'技术文档')
         c.setFillColor(INK); c.setFont('Heading',23)
@@ -246,7 +248,7 @@ def markup(text, emphasis=True):
 
 
 def build(source, output, records, font_dir):
-    material_evidence(ROOT)
+    material_evidence(ROOT, json.loads((ROOT/'docs/assets/提交日源码验收.json').read_text(encoding='utf-8')))
     fonts(font_dir)
     text=source.read_text(encoding='utf-8')
     rows=source_records()

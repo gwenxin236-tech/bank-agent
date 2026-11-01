@@ -39,6 +39,7 @@ class RecoveryDrill:
         self.base = ''
         self.checks = []
         self.rto = []
+        self.request_metrics = []
         self.opener = build_opener(ProxyHandler({}))  # never send loopback traffic to a proxy
 
     def check(self, name, condition):
@@ -50,11 +51,23 @@ class RecoveryDrill:
         request = Request(self.base + path, data=json.dumps(body).encode() if body is not None else None,
                           # D1: fixed offline identity survives restart; production uses a renewed IAM session.
                           headers={'Content-Type': 'application/json', 'Authorization': 'Bearer demo-user-session'})
+        # This is the local drill's transport budget, not its restart RTO.
+        # A slow durable confirmation must never cause a second write request.
+        budget = min(10.0, self.rto_target)
+        started = time.monotonic()
+        route = path.split('?', 1)[0]
         try:
-            with self.opener.open(request, timeout=2) as response:
-                return response.status, json.load(response)
+            with self.opener.open(request, timeout=budget) as response:
+                result = response.status, json.load(response)
+                self.request_metrics.append({'route': route, 'status': response.status,
+                    'seconds': round(time.monotonic() - started, 3), 'budget_seconds': budget})
+                return result
         except HTTPError as error:
             return error.code, json.load(error)
+        except TimeoutError:
+            self.request_metrics.append({'route': route, 'status': 'TIMEOUT',
+                'seconds': round(time.monotonic() - started, 3), 'budget_seconds': budget})
+            raise DrillFailure('http_request_timeout:' + route) from None
 
     def post(self, path, body):
         code, out = self.request(path, body)
@@ -198,7 +211,8 @@ class RecoveryDrill:
         return {'status': 'PASS', 'scope': 'demo_only_not_production_dr_acceptance',
                 'rpo_acknowledged_waiting_tasks_lost': 0, 'rto_target_seconds': self.rto_target,
                 'rto_observed_seconds': self.rto, 'core_transaction_count': 2,
-                'debit_total_cents': 510000, 'expired_auth_rechallenged': True, 'checks': self.checks}
+                'debit_total_cents': 510000, 'expired_auth_rechallenged': True, 'checks': self.checks,
+                'request_metrics': self.request_metrics}
 
 
 def main():
@@ -216,7 +230,7 @@ def main():
             # Never echo request bodies, tokens, OTPs, database payloads or child logs.
             report = {'status': 'FAIL', 'scope': 'demo_only_not_production_dr_acceptance',
                       'failed_check': str(error) if isinstance(error, DrillFailure) else type(error).__name__,
-                      'checks': drill.checks}
+                      'checks': drill.checks, 'request_metrics': drill.request_metrics}
         finally:
             drill.close()
     print(json.dumps(report, ensure_ascii=False, indent=2))

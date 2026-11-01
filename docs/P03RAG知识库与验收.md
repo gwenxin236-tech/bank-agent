@@ -32,7 +32,7 @@
 - `RAG_USE_MODEL=1`显式启用外部模型；未启用时，知识问答不发模型请求。离线开关或`AgentRuntime(offline=True)`会禁用外发。共用`self.parser.llm.client`，与意图解析共享P02的实例内频率/并发限制。
 
 ```powershell
-Set-Location -LiteralPath 'C:/Users/gwx/Desktop/bank_agent/银行ai智能体app'
+# 先进入已解压的项目根目录，再执行后续命令
 $env:BANK_AGENT_OFFLINE='0'
 $env:RAG_USE_MODEL='1'
 $env:VOICE_ENABLED='0'

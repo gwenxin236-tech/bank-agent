@@ -172,7 +172,7 @@ class TechnicalFigure(Flowable):
         self.note('相同商户、金额、日期不足以认定重复；coverage 明确来源边界',17)
 
     def draw_testcounts(self):
-        evidence=json.loads((self.root/'docs/assets/N16发行验收.json').read_text(encoding='utf-8'))
+        evidence=json.loads((self.root/'docs/assets/提交日源码验收.json').read_text(encoding='utf-8'))
         counts=evidence['test_modules'];total=evidence['regression']['current_full_windows']['tests']
         if sum(counts.values())!=total:raise ValueError('actual test module counts mismatch')
         record={'total':total,'modules':counts}
@@ -186,14 +186,14 @@ class TechnicalFigure(Flowable):
         self.note('全部 '+str(record['total'])+' 项来自实际完整报告；此图仅列部分模块，不是覆盖率',10)
 
     def draw_deployment(self):
-        self.tag(0,248,'当前源码 / 新镜像未构建 / 物理异机待验',TEAL)
-        self.box(0,149,224,70,'维护者准备', ['当前源码与原始验收','Docker损坏，构建待验'],BLUE)
+        self.tag(0,248,'当前源码与默认容器 / AI完整镜像另验',TEAL)
+        self.box(0,149,224,70,'维护者准备', ['审核源码与互补回归','默认容器按最终CI核验'],BLUE)
         self.box(276,149,224,70,'历史三配置回退',['模型/依赖随旧镜像保留','校验后导入，不冒称当前功能'],TEAL)
         self.arrow([(224,184),(276,184)],TEAL)
-        self.box(0,38,224,70,'接收方前置环境',['兼容 Linux/amd64 Docker 引擎','不随源码安装 / 非任意系统承诺'],BLUE)
+        self.box(0,38,224,70,'接收方前置环境',['Python 3.12/3.13默认源码模式','可选镜像需兼容Docker引擎'],BLUE)
         self.box(276,38,224,70,'目标电脑验收',['校验 → load → 本地启动','实际断网复核与保留验收记录'],AMBER)
         self.arrow([(388,149),(388,108)],AMBER,True);self.arrow([(224,73),(276,73)],BLUE)
-        self.note('旧版53/32/25项仅属历史；新镜像/第二台物理电脑均待验',12)
+        self.note('历史AI三配置不代表当前集成；物理异机与真人验收另列',12)
 
     def draw_rag(self):
         self.tag(0,288,'本机向量 + 独立重排 / 访问权限前后复核')

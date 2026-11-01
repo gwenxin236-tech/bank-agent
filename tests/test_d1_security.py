@@ -56,6 +56,28 @@ class D1SecurityTests(unittest.TestCase):
                     server.shutdown()
                     worker.join(timeout=5)
 
+    def test_state_never_preloads_yellow_subscription_data(self):
+        before = copy.deepcopy(self.rt.bank.subscriptions)
+        balance = self.rt.bank.balance().data
+        with patch.object(self.rt.bank, 'subscriptions_query', wraps=self.rt.bank.subscriptions_query) as query:
+            for _ in range(2):
+                status, state = self.http('GET', '/api/state', session='demo-user-session')
+                self.assertEqual(status, 200)
+                self.assertNotIn('subscriptions', state)
+                self.assertEqual(state['balance'], balance)
+                query.assert_not_called()
+            _, planned = self.http('POST', '/api/chat', {'message': '查询自动续费订阅'}, 'demo-user-session')
+            query.assert_not_called()
+            confirmation = {'plan_id': planned['plan']['plan_id'], 'action_token': planned['plan_view']['action_token']}
+            _, result = self.http('POST', '/api/confirm', confirmation, 'demo-user-session')
+            self.assertEqual(result['result']['status'], 'SUCCESS')
+            query.assert_called_once()
+            self.assertEqual(self.rt.bank.subscriptions, before)
+            self.assertEqual(self.rt.bank.balance().data, balance)
+            _, state = self.http('GET', '/api/state', session='demo-user-session')
+            self.assertNotIn('subscriptions', state)
+            query.assert_called_once()
+
     def test_subscription_query_http_requires_session_and_bound_confirmation(self):
         with patch.object(self.rt.bank, 'subscriptions_query', wraps=self.rt.bank.subscriptions_query) as query:
             status, rejected = self.http('POST', '/api/chat', {'message': '查询自动续费订阅'})

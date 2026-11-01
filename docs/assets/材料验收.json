@@ -36,5 +36,7 @@
   "human_timing_playback": "PENDING",
   "platform_receipt": "NO_EVIDENCE",
   "new_image_container_acceptance": "PENDING_DOCKER_ENGINE",
-  "record": "data/verification/finalize-20261031/batch06/report.json"
+  "record": "data/verification/finalize-20261031/batch06/report.json",
+  "historical_only": true,
+  "superseded_by": "docs/assets/提交日材料验收.json"
 }

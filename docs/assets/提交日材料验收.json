@@ -1,0 +1,104 @@
+{
+  "schema": 1,
+  "date": "2026-11-01",
+  "status": "PASS_CURRENT_MATERIAL_AUTOMATED_QA",
+  "source_evidence": "docs/assets/提交日源码验收.json",
+  "introduction": {
+    "path": "submission/作品简介.txt",
+    "non_whitespace_characters": 175,
+    "including_newline": 176,
+    "sha256": "c11f09025fdfc001b7b3fcf9bcaae8041df8e7d0807889246de481928cc4d7c5"
+  },
+  "pdf": {
+    "path": "submission/澜银行AI智能体_技术文档.pdf",
+    "sha256": "c8aab725bf726704671b92024b19f5c273cdf31dbd206bd73d1337101ca811de",
+    "bytes": 1970027,
+    "pages": 64,
+    "source_references": 74,
+    "stale_reference_hashes": [],
+    "headings": 121,
+    "superscript_reference_characters": 2325,
+    "out_of_page_characters": 0,
+    "empty_pages": 0,
+    "typography": {
+      "headings": "black, Microsoft YaHei Bold",
+      "emphasis": "green bold",
+      "citations": "superscript, 6.8pt, raised 4pt",
+      "code": "Consolas 8.6pt, SimSun CJK fallback, snippet line numbers, light gray panel"
+    },
+    "full_page_render_directory": "private verification/pdf-final/render-r2",
+    "visual_review": "All 64 pages rendered and reviewed in four contact sheets; architecture, code and current regression pages additionally inspected at page size. No clipping or blank pages detected.",
+    "rendered_pages": 64
+  },
+  "presentation": {
+    "path": "submission/澜银行AI智能体_答辩_v2.pptx",
+    "sha256": "ba236c6822d0cb448ae5dbea63d6ad06565cf0b72ae38438ec205e67607797a2",
+    "bytes": 739363,
+    "slides": 12,
+    "speaker_notes": 12,
+    "speech_and_nonspoken_citations_separated": true,
+    "planned_talk_seconds": 290,
+    "combined_with_video_seconds": 543.56,
+    "speech_characters": 646,
+    "estimated_speech_seconds_at_180_cpm": 215.33333333333334,
+    "human_rehearsal_measured": false,
+    "native_powerpoint_or_wps_verified": false,
+    "validation_receipt": "private verification/record-final/deck-delivery-r1/validation.json",
+    "visual_review": "All 12 final slides individually rendered and visually reviewed; no redesign",
+    "geometry_findings": 0
+  },
+  "video": {
+    "path": "submission/澜银行AI智能体_演示.mp4",
+    "status": "PASS_H264_AAC_FULL_DECODE_AND_BROWSER_PLAYBACK",
+    "frames": 6339,
+    "fps": 25.0,
+    "duration_seconds": 253.56,
+    "container_duration_seconds": 253.561927,
+    "audio_pcm_seconds": 253.56,
+    "audio": true,
+    "codec": "H.264/AVC + AAC",
+    "faststart": true,
+    "bytes": 66631378,
+    "sha256": "e1d9f3f497d0cebf0fa6810ed60fffdd121cd5ad511787d4cc82738d36e82421",
+    "browser": {
+      "duration": 253.561927,
+      "readyState": 4,
+      "error": null,
+      "audio_rms_peak": 0.11588693987947819,
+      "positions": [
+        {
+          "time": 127.239201,
+          "error": null,
+          "ready": 4
+        },
+        {
+          "time": 248.9696,
+          "error": null,
+          "ready": 4
+        }
+      ],
+      "playing": true
+    },
+    "scenes": 17,
+    "cloud_calls": 0
+  },
+  "repository": {
+    "url": "https://github.com/gwenxin236-tech/bank-agent",
+    "visibility": "public",
+    "exact_commit_and_ci": "final external delivery index; no self-referential Git SHA"
+  },
+  "scope": {
+    "cloud_calls": 0,
+    "new_dependencies": false,
+    "visual_redesign": false,
+    "local_synthetic_narration": true
+  },
+  "remaining_manual": [
+    "human rehearsal",
+    "native PowerPoint/WPS playback",
+    "physical second computer/offline complete-AI profile",
+    "competition portal receipt"
+  ],
+  "default_source_deployment": "SEE_FINAL_DELIVERY_INDEX",
+  "complete_ai_offline_images": "NOT_REBUILT_CURRENT_DOCKER_UNAVAILABLE"
+}

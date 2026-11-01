@@ -16,7 +16,7 @@ if(!record.startsWith(path.join(root,'data','verification')+path.sep))throw Erro
 const work=path.join(record,'deck-'+(process.env.DECK_REVISION||'r1'));await fs.mkdir(work,{recursive:true});
 const recording=JSON.parse(await fs.readFile(path.join(record,'recording/report.json'),'utf8'));
 if(recording.status!=='PASS'||!recording.video||recording.video.duration_seconds>300)throw Error('Current real recording must pass first');
-const checked=spawnSync(python,[path.join(root,'scripts/source_release.py'),'evidence',path.join(root,'docs/assets/N16发行验收.json'),'--root',root],{encoding:'utf8',timeout:30000});
+const checked=spawnSync(python,[path.join(root,'scripts/source_release.py'),'evidence',path.join(root,'docs/assets/提交日源码验收.json'),'--root',root],{encoding:'utf8',timeout:30000});
 if(checked.status!==0)throw Error('Current material evidence rejected: '+checked.stderr);
 const evidence=JSON.parse(checked.stdout);const fullTests=evidence.regression.current_full_windows.tests;
 const runtimePassed=evidence.offline.status==='PASS';
@@ -26,23 +26,26 @@ const FONT='Microsoft YaHei';const {GlobalFonts}=require('@napi-rs/canvas');if(!
 const p=Presentation.create({slideSize:{width:1280,height:720}});
 const C={blue:'#1E4BAE',ink:'#000000',muted:'#4E6075',pale:'#ECF2FB',line:'#C9D5E6',green:'#146B27',amber:'#9B630B',red:'#A22B32',white:'#FFFFFF'};
 let s;const timings=[15,25,30,30,25,30,30,25,30,20,10,20];
+const lectureSource=await fs.readFile(path.join(root,'docs/答辩PPT内容.md'),'utf8');
+const lectures=[...lectureSource.matchAll(/<!-- slide-speech-(\d+) -->\s*([\s\S]*?)\s*<!-- \/slide-speech -->/g)].map((m,i)=>{if(Number(m[1])!==i+1)throw Error('Speech order mismatch');return m[2].trim();});
+if(lectures.length!==12)throw Error('Twelve reviewed lecture texts required');
 function rect(x,y,w,h,fill=C.white,line='none'){return s.shapes.add({geometry:'rect',position:{left:x,top:y,width:w,height:h},fill,line:{fill:line,width:line==='none'?0:1}});}
 function text(value,x,y,w,h,size=25,color=C.ink,bold=false){const q=rect(x,y,w,h,'none');q.text=value;q.text.style={typeface:FONT,fontSize:size,color,bold,insets:0,verticalAlignment:'top',wrap:'square',autoFit:'none'};return q;}
 function line(x,y,w,color=C.line){rect(x,y,w,1,color);}
 function arrow(x,y,w=50){text('→',x,y,w,42,32,C.blue,true);}
 function node(title,body,x,y,w=245,h=100){rect(x,y,w,h,C.pale,C.line);text(title,x+15,y+13,w-30,34,25,C.ink,true);text(body,x+15,y+51,w-30,h-55,18,C.muted);}
 function slide(title,section,notes,sources){s=p.slides.add();s.background.fill=C.white;rect(0,0,1280,44,C.blue);text('澜银行 AI 智能体',44,10,600,29,18,C.white,true);text(section,850,10,380,29,18,C.white);text(title,58,75,1160,65,38,C.ink,true);line(58,149,1164);text('竞赛原型 · 本地/虚构资金 · 2026-11-01',58,685,950,23,13,C.muted);text(String(p.slides.items.length).padStart(2,'0'),1178,685,50,23,14,C.muted);
- s.speakerNotes.text=`口述预算${timings[p.slides.items.length-1]}秒，尚需真人排练。\n${notes}\n证据：\n${sources.join('\n')}\n默认Mock与可选Fineract/身份模式分开，不把本地或自动验收称为生产/真人认证。`;return s;}
+ s.speakerNotes.text=`讲稿：${lectures[p.slides.items.length-1]}\n核验依据（不口述）：${notes}\n${sources.join('\n')}\n本页预算${timings[p.slides.items.length-1]}秒，现场计时另验。`;return s;}
 async function image(name,x,y,w,h,alt){const data=await fs.readFile(path.join(record,'recording',name));const iw=data.readUInt32BE(16),ih=data.readUInt32BE(20);const scale=Math.min(w/iw,h/ih);s.images.add({blob:new Uint8Array(data),contentType:'image/png',alt,position:{left:x+(w-iw*scale)/2,top:y+(h-ih*scale)/2,width:iw*scale,height:ih*scale}});}
 function small(value,y=630,color=C.muted){text(value,58,y,1164,40,20,color);}
 slide('澜银行 AI 智能体','银行业务 · 安全Agent','介绍定位和已验证范围；不套用参考作品团队、机构标识和指标。',['docs/技术文档.md:1','docs/assets/P11发行验收.json']);
 text('自然语言办理银行业务',64,235,1120,90,62,C.ink,true);text('多领域协作，平台统一授权与执行',69,353,1120,57,34,C.blue,true);
-line(69,451,1100,C.blue);text('本地知识检索与独立重排 · OCR核对草稿 · 受控动态DAG',69,490,1100,50,27);text(`${fullTests}项自动回归  /  新镜像与异机仍待验`,69,560,1100,45,27,C.green,true);
+line(69,451,1100,C.blue);text('本地知识检索与独立重排 · OCR核对草稿 · 受控动态DAG',69,490,1100,50,27);text(`${fullTests}项互补分组回归  /  公开源码与CI可核验`,69,560,1100,45,27,C.green,true);
 text('项目负责人：宫文馨  |  成员：董有轩、李浩林、郭嘉乐、李苏润',69,623,1100,35,20,C.ink);
 slide('自然语言请求需要四道可信边界','01 需求与业务边界','依据原始赛题，不称独立用户调研或效率提升。',['人工智能赛道原始要求.docx P11-P23','app/banking_agent.py']);
 const needs=[['要素不完整','“给妈妈转账”先补齐金额和可信账户'],['业务有副作用','理解意图不等于授权，用户核对原计划'],['结果会不确定','超时查原请求，不能重新转一次或补写成功'],['任务可能中断','持久化节点状态，回退只执行已声明补偿']];
 needs.forEach(([a,b],i)=>{const y=180+i*108;text(String(i+1).padStart(2,'0'),65,y,80,55,40,C.blue,true);text(a,170,y,1020,38,29,C.ink,true);text(b,170,y+43,1020,45,24,C.muted);if(i<3)line(170,y+95,1030);});
-slide('四域增量与平台统一执行','02 整体方案','支付、反诈、财务、家庭已本地增量贯通；订阅/卡片保持既有基础版本；来源冲突不投票授权。',['app/domain_agent_registry.py','app/supervisor.py','app/domain_agent_contract.py']);
+slide('六领域接入与平台统一执行','02 整体方案','六领域均已接入；成员订阅与卡片增强和语音审计修复已集成。来源冲突保留给平台和人工核对。',['app/domain_agent_registry.py','app/supervisor.py','app/domain_agent_contract.py']);
 node('输入与理解','文字 / OCR草稿 / 可选语音',58,190,350,95);node('可信业务计划','规则 / 受限模型，实体由平台核验',465,190,350,95);node('安全执行链','Policy → 确认/认证 → DAG → 工具',872,190,350,95);arrow(417,215);arrow(824,215);
 const domains=['支付与交易','反诈风控','财务健康','家庭授权','订阅治理','卡片管理'];domains.forEach((a,i)=>{const x=58+(i%3)*407,y=335+Math.floor(i/3)*94;rect(x,y,350,72,C.pale);text(a,x+18,y+20,315,38,26,C.ink,true);});
 text('Supervisor：上下文绑定 → 平台快照比对 → 冲突保留 → 原执行链',58,553,1164,48,29,C.blue,true);small('领域Finding/Proposal只能提供事实与建议，不能决定权限或直接调用资金工具');
@@ -68,24 +71,24 @@ await image('15-dispute.png',58,237,560,330,'当前界面的交易异议和本�
 await image('16-funding.png',660,237,560,330,'当前界面的期限、保留额、不借款和资金缺口');
 text('B 交易事实 / 用户主张 / 本地工单分开',58,587,560,36,23,C.ink,true);text('C 当前可用资金 / 期限 / 缺口可核对',660,587,560,36,23,C.ink,true);
 small('B/C通过任务面板办理；自由对话建单未实现，银行正式案件号和退款仍待核实');
-slide('回归与冻结压测分别给出证据','04 验证结果','当前源码完整回归以N16元数据为准；表中负载为N15当前运行时代码实测，非生产或真人证明。',['docs/assets/N16发行验收.json','docs/assets/P10性能压测验收.json','docs/assets/最终交付验收.json']);
-const values=[['验证组','实测结果','解释边界'],['本轮完整回归',`${fullTests}项通过`,'0跳过 / 0 ResourceWarning'],['三原型固定矩阵','12/12达预期','合成Mock，真人0样本'],['平台300秒持续组','600次 / 301.51秒','本地闭环，非生产容量'],['P95 / 资金正确性','708ms / 重复扣款0','逐笔241分与审计一致']];
+slide('回归与冻结压测分别给出证据','04 验证结果','当前源码互补回归以提交日源码验收记录为准；表中负载为N15冻结环境实测，非生产或真人证明。',['docs/assets/提交日源码验收.json','docs/assets/P10性能压测验收.json','docs/assets/最终交付验收.json']);
+const values=[['验证组','实测结果','解释边界'],['提交日互补回归',`${fullTests}项通过`,'0跳过 / 0 ResourceWarning'],['三原型固定矩阵','12/12达预期','合成Mock，真人0样本'],['N15历史持续负载组','600次 / 301.51秒','本地闭环，非生产容量'],['P95 / 资金正确性','708ms / 重复扣款0','逐笔241分与审计一致']];
 const table=s.tables.add({rows:5,columns:3,left:58,top:183,width:1164,height:340,columnWidths:[360,365,439],values});
 table.borders.assign({style:'solid',fill:C.line,width:1});for(let r=0;r<5;r++)for(let c=0;c<3;c++){const cell=table.getCell(r,c);cell.fill=r===0?C.pale:C.white;cell.text.style={typeface:FONT,fontSize:23,bold:r===0,color:C.ink,insets:12,verticalAlignment:'top'};}
 text('原型8并发 P95 4203ms；RAG重排120/120',58,560,1164,44,29,C.ink,true);small('本轮未调用付费API；固定合成题非盲测，词法113/120、融合116/120');
-slide('离线交接：当前源码与历史镜像分开','04 交付与边界','历史包包含本地模型和依赖；当前源码已更新但本机Docker损坏，新镜像未构建。历史包不得冒称当前版本。',['scripts/source_release.py','scripts/offline_release.py','docs/assets/最终交付验收.json']);
-['复制完整包','核对SHA清单','导入镜像','离线启动'].forEach((a,i)=>{node(a,i===0?'当前源码 / 历史镜像分开':i===1?'完整性校验，非签名':i===2?'历史回退，非本轮镜像':'本轮构建/异机仍待验',58+i*302,195,255,105);if(i<3)arrow(321+i*302,222,36);});
-const modes=[['默认离线','Mock + 本地RAG/重排/OCR'],['自建身份','密码＋TOTP，无预置种子'],['独立开源核心','Fineract + PostgreSQL，虚构资金']];modes.forEach(([a,b],i)=>{const y=351+i*77;text(a,63,y,260,40,27,C.ink,true);text(b,360,y,850,42,26,C.muted);line(58,y+58,1164);});small(runtimePassed?'目标机需已有兼容Docker；物理异机和托管CI仍待验':'Docker已损坏：本轮新镜像未构建，附带历史三配置只作回退，不代表当前功能');
+slide('当前源码、公开仓库与离线边界','04 交付与边界','默认源码已在干净Python环境验证；完整AI离线镜像与历史运行包分开标识，源码不携带模型和宿主环境。',['scripts/source_release.py','scripts/offline_release.py','docs/assets/最终交付验收.json']);
+['获取审核源码','核对SHA清单','按说明启动','核对演示结果'].forEach((a,i)=>{node(a,i===0?'公开仓库 / 最终源码ZIP':i===1?'源码与材料分别校验':i===2?'默认Python / 可选镜像':'Mock资金与可验证回执',58+i*302,195,255,105);if(i<3)arrow(321+i*302,222,36);});
+const modes=[['默认源码','标准库Mock；AI模块需另配本地资产'],['自建身份','密码＋TOTP，无预置种子'],['独立开源核心','Fineract + PostgreSQL，虚构资金']];modes.forEach(([a,b],i)=>{const y=351+i*77;text(a,63,y,260,40,27,C.ink,true);text(b,360,y,850,42,26,C.muted);line(58,y+58,1164);});small('同一发布源码与CI按最终索引核验；完整AI镜像和物理异机保持独立验收边界');
 slide('真实界面演示','04 演示','在此页另播当前MP4。视频为自动浏览器的真实本机界面与模型，不作为真人操作证明；播放不计入本页10秒口述预算。',['scripts/record_competition_demo.mjs',path.relative(root,path.join(record,'recording/report.json'))]);
 await image('03-yellow.png',58,174,740,450,'本次实录的原计划确认卡');text('按顺序看五件事',840,192,360,45,30,C.ink,true);text('先补齐再确认\n认证不等于扣款\nRAG有引用\nOCR只填草稿\n自建坐席不改账',840,274,360,255,28,C.muted);small(`本次视频 ${recording.video.duration_seconds.toFixed(2)}秒；外部API调用0，临时Mock数据库`);
 slide('当前成果与后续工作','04 总结','不把未完成项改为通过：人工作业/外部环境/任意跨业务DAG和生产认证分别排期。当前交付以最终发行索引和收件记录为准。',['docs/验收摘要.json known_unverified','docs/五人团队Agent接入契约.md']);
-const conclusions=[['本地已验','四域与平台权限链\n任务单、来源与效果绑定\n本地RAG/重排/OCR\n固定矩阵与当前负载'],['仍待真人','自建双端人工操作\n独立TOTP与真实读屏\n真实问法/图片/语音\n物理第二台与实际汇报计时'],['仍待外部与扩展','持牌银行与官方IM\n生产认证/硬件证明\n任意跨业务/生产并行\n完整云端与生产容量']];
+const conclusions=[['本地已验','六领域与平台权限链\n订阅确认与状态读取隔离\n本地RAG/重排/OCR\n固定矩阵与当前负载'],['仍待真人','自建双端人工操作\n独立TOTP与真实读屏\n真实问法/图片/语音\n物理第二台与实际汇报计时'],['仍待外部与扩展','持牌银行与官方IM\n生产认证/硬件证明\n任意跨业务/生产并行\n完整云端与生产容量']];
 conclusions.forEach(([a,b],i)=>{const x=58+i*407;text(a,x,205,350,48,31,C.ink,true);rect(x,266,350,3,i===0?C.green:C.blue);text(b,x,300,350,240,26,C.muted);});small('让请求更易表达，让权限、过程与事实都可核对',624,C.blue);
 const candidate=path.join(work,'candidate.pptx');await(await PresentationFile.exportPptx(p)).save(candidate);
 const final=path.join(record,'output-'+(process.env.DECK_REVISION||'r1'),'final.pptx');await fs.mkdir(path.dirname(final),{recursive:true});
 await finalizePresentation({workspaceDir:root,candidatePath:candidate,finalPath:final,pythonExecutable:python,integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','12192000,6858000','--validate-bullet-geometry','--validate-heading-fit','--require-native-table-slide','9'],explicitTotalSlideCount:12,requiredNativeTableOwnerSlides:[9],requiredNativeChartOwnerSlides:[],fontPolicy:{basis:'design',families:[FONT]},verifyArtifactToolImport:true,receiptPath:path.join(work,'validation.json')});
 const finalDeck=await PresentationFile.importPptx(await FileBlob.load(final));for(let i=0;i<finalDeck.slides.items.length;i++){const png=await finalDeck.export({slide:finalDeck.slides.items[i],format:'png',scale:1});await fs.writeFile(path.join(work,`slide-${String(i+1).padStart(2,'0')}.png`),new Uint8Array(await png.arrayBuffer()));}
 const talk=timings.reduce((a,b)=>a+b,0),budget=talk+recording.video.duration_seconds;if(budget>600)throw Error('Planned talk plus measured video exceeds 10 minutes');
-await fs.writeFile(path.join(work,'timing.json'),JSON.stringify({slides:timings,planned_talk_seconds:talk,actual_video_seconds:recording.video.duration_seconds,combined_planned_seconds:budget,human_rehearsal_measured:false},null,2));
+await fs.writeFile(path.join(work,'timing.json'),JSON.stringify({slides:timings,planned_talk_seconds:talk,actual_video_seconds:recording.video.duration_seconds,combined_planned_seconds:budget,human_rehearsal_measured:false,speech_characters:lectures.map(x=>x.replace(/\s/g,'').length),estimated_speech_seconds_at_180_cpm:lectures.reduce((a,x)=>a+x.replace(/\s/g,'').length,0)/3},null,2));
 await fs.writeFile(path.join(work,'reference.json'),JSON.stringify({source:reference?'explicit local reference file':'user-provided reference previously reviewed',sha256:reference?createHash('sha256').update(await fs.readFile(reference)).digest('hex'):referenceSha,usage:'visual inspiration: blue header/white technical pages, section organization, workflow/algorithm evidence; no source team/logo/metrics copied',reference_pages_rendered:24},null,2));
 await fs.copyFile(final,path.join(root,'submission/澜银行AI智能体_答辩_v2.pptx'));console.log('DECK COMPLETE',final);
