@@ -1,10 +1,12 @@
 # 银行 AI 智能体应用与 GitHub 团队协作指南
 
-## 0 本项目五人协作：按这个顺序实际操作（2026-09-22 增补）
+## 0 五人协作流程与当前发布状态（2026-11-01校订）
 
-本节是项目特定流程，后文保留安装、Git 操作和排错细节。**负责人先做 A–D，队友做 E，日常做 F；不要跳过交付检查直接上传当前目录。** 当前没有配置远程地址；本轮未创建 GitHub 仓库、未邀请真实账号、未 push。
+本节说明项目协作流程，后文保留安装、Git操作和故障排查方法。负责人负责A—D阶段，团队成员执行E阶段，日常协作遵循F阶段；交付检查通过后方可发布。
 
-### A. 负责人：先确定可交付文件，避免“我这里能跑，队友那里缺文件”
+当前已存在仓库https://github.com/gwenxin236-tech/bank-agent，已发布基线为`release/competition-20261031`分支的`0c6608f4e136da4dd440410fad7b20ef90dc4ce4`。该版本的托管CI证据不代表本地N16新增源码已通过远端验证；本地N16尚未提交或推送。原工作目录与独立发布目录分开管理，不应为匹配下列通用示例而改写原仓库、重建远端或覆盖已有分支。成员邀请、分支保护及真实账号归属仍需按仓库设置核验。依据：`data/verification/finalize-20261031/publication/`历史发布证据；N16当前状态见`docs/assets/N16发行验收.json`。
+
+### A. 负责人确认交付范围与可复制性
 
 位置：本机仓库根目录终端。
 
@@ -15,17 +17,17 @@
 5. 已批准的提交准备好后，在原仓库执行 `git clone --no-local . ../banking-release-check`，进入新目录运行 `python3 -m unittest discover -s tests -v`、`python3 scripts/preflight.py`、`./run.sh`。不要从原目录手工复制缺失文件“补绿”；回原仓库正常修复、提交，再在新的空目录克隆。
 6. 验证完成：干净克隆测试通过、健康接口正常、网页能办查询/确认流程，且 `git status --short` 没有意外受跟踪变更。浏览器/故障演练需按其说明显式启用，默认 skip 不能当作已跑。
 
-### B. 负责人：创建远程仓库和邀请四位成员
+### B. 负责人管理仓库访问权限（建仓步骤仅适用于新项目）
 
 位置：GitHub 网页（负责人自己的账号）。
 
 1. 登录 → 右上角 **+ → New repository** → Owner 选团队组织（没有组织可暂用负责人个人账号）→ Repository name 填 `banking-ai-agent` → 选择 **Private**（除非赛事要求公开并已审核无敏感数据）。
 2. **不要**勾选 Initialize/Add README、`.gitignore`、License，本地已存在 Git 历史。点击 **Create repository**。验证：进入空仓库 Quick setup 页面，复制 SSH 或 HTTPS 地址；此时还没有上传任何本地代码。
-3. 仓库 **Settings → Collaborators**（组织仓库通常为 **Collaborators and teams / Manage access**）→ **Add people** → 输入队友真实 GitHub 用户名 → Invite。四位队友分别登录自己的账号，在通知/邮件接受邀请。组织仓库成员通常授予 Write，不授予 Admin；个人仓库权限粒度以实际界面为准。
-4. 验证：访问列表里不再是 Pending invite，队友能打开私有仓库。仅发邀请没有接受，不能算配置完成。队友确认 GitHub 用户名，后面替换 CODEOWNERS 用。
+3. 仓库 **Settings → Collaborators**（组织仓库通常为 **Collaborators and teams / Manage access**）→ **Add people** → 输入团队成员真实 GitHub 用户名 → Invite。四位团队成员分别登录自己的账号，在通知/邮件接受邀请。组织仓库成员通常授予 Write，不授予 Admin；个人仓库权限粒度以实际界面为准。
+4. 验证：访问列表里不再是 Pending invite，团队成员能打开私有仓库。仅发邀请没有接受，不能算配置完成。团队成员确认 GitHub 用户名，后面替换 CODEOWNERS 用。
 5. 公开仓库免费计划可用分支保护；私有仓库保护取决于 Pro/Team 等计划。若页面提示升级或不可用，请负责人选择合适计划/组织，**不要为解锁功能未经审核改成公开**。手工约定不是技术保护。
 
-### C. 负责人：首次上传、创建 develop、检查 CI
+### C. 发布与CI检查（下列为新项目通用示例）
 
 位置：已通过 A 验证的本机仓库终端 + GitHub 网页。下列 push 全部由人执行，本轮 AI 不代执行。
 
@@ -47,7 +49,7 @@ git push -u origin develop
 - GitHub **Code** 页切换 main/develop，均应看到批准的提交；**Actions → ci → 最新一次运行 → quality**，检查每个步骤。
 - 当前工作流包含 Python 编译、JS 语法、测试、preflight、Docker 构建，不调用付费模型。失败点击红色步骤展开日志，修复后再提交，不用重跑掩盖源码缺失。
 - 如果 SSH 未配置，看本文第 5 节；可用 HTTPS + GitHub Desktop 登录，不把账号密码当 Git 密码。`origin already exists` 时先 `git remote get-url origin`，确认再 `git remote set-url origin 正确地址`。
-- 验证：两个远程分支存在、main 的 CI 全绿、队友能 clone。CI 首次跑过后，`quality` 才可能出现在保护规则的检查下拉框中。
+- 验证：两个远程分支存在、main 的 CI 全绿、团队成员能 clone。CI 首次跑过后，`quality` 才可能出现在保护规则的检查下拉框中。
 
 ### D. 负责人：分支门禁与 CODEOWNERS（不只是口头约定）
 
@@ -57,15 +59,15 @@ git push -u origin develop
 2. 勾选 Require a pull request before merging、Require approvals（至少 1）、Dismiss stale approvals、Require conversation resolution。
 3. 勾选 Require status checks to pass，选第一次 CI 实际产生的 **quality**（界面可能显示 `ci / quality`），可要求分支与目标最新版本同步。不要凭空输入一个从不产生的检查名。
 4. 不允许 force push / deletion；可启用 Do not allow bypassing 让管理员也遵守。组织计划支持时限制 main 合并/推送主体为负责人，负责人自己的变更仍由另一位成员评审。
-5. 维护 `.github/CODEOWNERS`：当前文件的 `@banking-agent-maintainers` 等是占位，**不代表已经邀请了真实团队**。负责人在单独 PR 中将其改成可访问仓库的真实账号/组织团队：共享核心与安全归负责人；四域和对应测试归本人；负责人兜底。域规则应在共享兜底规则之后（后匹配生效）。不把不存在的 `security_ext/` 当作已落地目录。
+5. 维护 `.github/CODEOWNERS`：当前文件的 `@banking-agent-maintainers` 等是占位，**不代表已经邀请了真实团队**。负责人在单独 PR 中将其改成可访问仓库的真实账号/组织团队：共享核心与安全归负责人；四域和对应测试归本人；负责人负责最终复核。域规则应在共享默认规则之后（后匹配生效）。不把不存在的 `security_ext/` 当作已落地目录。
 6. 确认 CODEOWNERS 无错误且评审人有 Write 后再开启 Require review from Code Owners。目录归属是评审规则，**不是对 Write 成员的文件级写入隔离**；审查 PR 文件清单仍必需。
 7. 验证：开一个只改自己域 README 的演示 PR 到 develop，未批准时不能合并，CI 出现并通过、负责人审查后可合并；保护规则页面能看到两分支处于生效状态。不要用真实破坏性 force push 来测试保护。
 
 官方依据：[GitHub 分支保护与计划边界](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)。界面标签随版本/语言可能略有不同，以当前权限页为准。
 
-### E. 每位队友：第一次搭环境（无需模型 Key）
+### E. 团队成员首次配置开发环境（无需模型密钥）
 
-位置：队友自己的电脑。
+位置：团队成员自己的电脑。
 
 1. 接受邀请；安装 Git、Python 3（建议与 CI 一致用 3.12），编辑器用 VS Code 或本人习惯的工具。Mac/Linux 终端；Windows 推荐 WSL 或 Git Bash，详见第 3–5 节。
 2. `git --version`、`python3 --version` 验证；设置自己的提交署名：`git config --global user.name "本人姓名"`、`git config --global user.email "本人 GitHub 已验证邮箱或 noreply 邮箱"`。不要用负责人的账号身份。
@@ -104,7 +106,7 @@ git push -u origin feature/antifraud-new-rule
 
 GitHub **Pull requests → New pull request**：base 选 `develop`、compare 选自己的 feature；写“范围/需求/红绿测试证据/无副作用或安全边界/截图”；Reviewers 选负责人；检查 **Files changed** 只有本域和声明的本域配置。CI 绿不代表自动批准。负责人确认→合并 develop→集成回归→发布 PR（base main，compare develop）→另一成员审查→负责人合并。合并后本人同步 develop，再开新的域支线；不要在旧支线上反复堆积。
 
-**本轮需要人做且尚未代办**：批准残留文件交付、创建仓库、接受邀请、绑定远端、push、保护规则及真实 CODEOWNERS、队友机器安装与麦克风授权。在线语音的 Key 申请/充值/安全输入见《大模型接入说明》。不要把“写好了操作文档”等同于这些账号侧动作已完成。
+**待负责人完成的外部操作**：批准残留文件交付、创建仓库、接受邀请、绑定远端、push、保护规则及真实 CODEOWNERS、团队成员的计算机安装与麦克风授权。在线语音的 Key 申请/充值/安全输入见《大模型接入说明》。不要把“已编写操作文档”等同于这些账号侧动作已完成。
 
 ## 1 指南用途
 
@@ -189,8 +191,8 @@ sudo apt install -y python3 python3-venv
 每台电脑第一次使用 Git，都要配置提交署名。邮箱应与 GitHub 账号中已验证的邮箱一致：
 
 ```bash
-git config --global user.name "你的姓名"
-git config --global user.email "你的邮箱"
+git config --global user.name "成员本人姓名"
+git config --global user.email "成员本人邮箱"
 git config --global init.defaultBranch main
 git config --global pull.rebase true
 ```
@@ -208,7 +210,7 @@ git config user.email
 生成密钥时不要覆盖已有密钥：
 
 ```bash
-ssh-keygen -t ed25519 -C "你的邮箱"
+ssh-keygen -t ed25519 -C "成员本人邮箱"
 eval "$(ssh-agent -s)"
 ssh-add ~/.ssh/id_ed25519
 pbcopy < ~/.ssh/id_ed25519.pub

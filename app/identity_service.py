@@ -45,6 +45,8 @@ class IdentityService:
               passed INTEGER NOT NULL DEFAULT 0,used_at REAL,trace_id TEXT NOT NULL);
               CREATE TABLE IF NOT EXISTS identity_login_limits(
               client_id TEXT PRIMARY KEY,attempts INTEGER NOT NULL,expires_at REAL NOT NULL);''')
+        runtime.bank.guardianships.require_explicit_consent=True
+        runtime.bank.guardianships.identity_device_resolver=self.family_device
         self._dummy=hashlib.pbkdf2_hmac('sha256',b'non-account-timing',b'fixed-dummy-salt',self.ITERATIONS).hex()
         service=getattr(runtime,'bank_service',None)
         if service is not None:
@@ -52,6 +54,27 @@ class IdentityService:
             # Device permission is scoped to a verified request, never a new global grant.
             self._bank_binding=service.resolve_binding
             service.resolve_binding=self._local_bank_binding
+    def family_device(self,user):
+        if user not in self.rt.bank.guardianships.accounts:return None
+        with self.lock:
+            now=self.clock();rows=self.db.execute("SELECT DISTINCT s.device_id FROM identity_sessions s JOIN identity_accounts a ON a.user_id=s.user_id WHERE s.user_id=? AND a.active=1 AND a.role='user' AND s.revoked=0 AND s.account_version=a.version AND s.expires_at>? AND s.last_seen>?",(user,now,now-self.IDLE_TTL)).fetchall()
+        return rows[0][0] if len(rows)==1 else None
+
+    def approve_family_scope(self,grant_id,permissions,version,code):
+        identity=self.current_identity();grant=self.rt.bank.guardianships.get(grant_id)
+        if not identity or identity['role']!='user' or not grant or grant.subject_id!=identity['user_id']:return False
+        with self.transaction():
+            account=self.db.execute('SELECT * FROM identity_accounts WHERE user_id=?',(identity['user_id'],)).fetchone();counter=self._counter(account,code)
+            if account['locked_until']>self.clock():return False
+            if counter is None:
+                failures=account['failures']+1
+                self.db.execute('UPDATE identity_accounts SET failures=?,locked_until=? WHERE user_id=?',(failures,self.clock()+self.LOCK_SECONDS if failures>=5 else 0,identity['user_id']))
+                self.record('family_scope_denied',identity['user_id'],reason='invalid_or_reused_totp')
+                return False
+            self.db.execute('UPDATE identity_accounts SET last_counter=?,failures=0 WHERE user_id=?',(counter,identity['user_id']))
+            self.record('family_scope_approved',identity['user_id'],grant_id=grant_id,permissions=permissions,previous_version=version)
+        return True
+
     def _local_bank_binding(self,actor):
         binding=self._bank_binding(actor);identity=self.current_identity()
         if binding and identity and identity['role']=='user' and actor==identity['user_id']==binding.actor_id==binding.subject_id=='demo-user':
@@ -116,7 +139,7 @@ class IdentityService:
         now=self.clock()
         if not row or row['revoked'] or not row['active'] or row['account_version']!=row['version'] or now>=row['expires_at'] or now-row['last_seen']>=self.IDLE_TTL or not hmac.compare_digest(row['device_hash'],digest(device)):raise PermissionError('session/device invalid')
         if touch:self.db.execute('UPDATE identity_sessions SET last_seen=? WHERE session_id=?',(now,row['session_id']))
-        return {'user_id':row['user_id'],'device_id':row['device_id'],'role':row['role'],'session_id':row['session_id'],'family':False}
+        return {'user_id':row['user_id'],'device_id':row['device_id'],'role':row['role'],'session_id':row['session_id'],'family':row['user_id'] in self.rt.bank.guardianships.accounts}
     @contextmanager
     def session(self,token,device):
         with self.transaction():identity=self._resolve(token,device,True)
@@ -156,7 +179,7 @@ class IdentityService:
     def _bound(self,ctx,banking=True):
         account=self.current_identity()
         return bool(account and account['user_id']==ctx.actor_id==ctx.subject_id and account['device_id']==ctx.device_id and account['session_id']==ctx.authorization_ref
-                    and (not banking or account['role']=='user' and account['user_id']=='demo-user'))
+                    and (not banking or account['role']=='user' and (account['user_id']=='demo-user' or account['user_id'] in self.rt.bank.guardianships.accounts)))
     def result(self,ctx,ok,code,data=None):return AdapterResult(bool(ok),code,'认证已核对' if ok else '认证未通过，请重新登录或核对操作',data or {},ctx.trace_id,new_request_id('identity'))
     def verify_subject(self,ctx,assertion):
         current=_CURRENT.get();ok=self._bound(ctx,False) and current and hmac.compare_digest(current[2],assertion or '')
@@ -223,7 +246,7 @@ class IdentityService:
         h._identity_response_cookies=[f'bank_session={token}; HttpOnly; SameSite=Strict; Path=/; Max-Age={age}{secure}',f'bank_device={device}; HttpOnly; SameSite=Strict; Path=/; Max-Age={age}{secure}']
     def handle(self,h,callback):
         path=urlsplit(h.path).path;method=h.command;token,device=self.cookies(h.headers)
-        if method=='GET' and path=='/api/v1/identity/capabilities':return h._send(200,{'ok':True,'mode':'SELF_HOSTED','methods':['password','totp'],'production_certified':False,'device_hardware_attestation':False,'family_delegation':False})
+        if method=='GET' and path=='/api/v1/identity/capabilities':return h._send(200,{'ok':True,'mode':'SELF_HOSTED','methods':['password','totp'],'production_certified':False,'device_hardware_attestation':False,'family_delegation':False,'family_assistance':True,'family_owner_totp_required':True})
         if method=='GET' and path=='/identity/login':return h._send(200,LOGIN_HTML.encode(),'text/html; charset=utf-8')
         if method=='GET' and path=='/identity/client.js':return h._send(200,LOGIN_SCRIPT.encode(),'application/javascript; charset=utf-8')
         if method=='GET' and path.startswith(('/static/','/healthz','/health/live')):return callback()
@@ -243,11 +266,15 @@ class IdentityService:
                 if path=='/api/v1/identity/me' and method=='GET':return h._send(200,{'ok':True,'user_id':account['user_id'],'device_id':account['device_id'],'role':account['role'],'method':'password_totp','production_certified':False})
                 if path=='/api/v1/identity/logout' and method=='POST':
                     self.logout(token);self._set_cookies(h,'','',True);return h._send(200,{'ok':True})
+                if path.startswith('/api/') and account['role']=='user' and account['user_id'] in self.rt.bank.guardianships.accounts:
+                    reads={'/api/state','/api/capabilities','/api/audit','/api/v1/business-tasks','/api/v1/transactions/status'}
+                    writes={'/api/chat','/api/confirm','/api/verify','/api/cancel','/api/v1/tasks/status','/api/v1/family/chat','/api/v1/family/review','/api/v1/family/permissions'}
+                    allowed=(method=='GET' and (path in reads or path.startswith(('/api/v1/family/','/api/v1/business-tasks/','/api/v1/audit/')))) or (method=='POST' and (path in writes or path.startswith('/api/dag/')))
+                    if not allowed:return h._send(403,{'ok':False,'error_code':'FAMILY_ROUTE_SCOPE','message':'该家庭账户尚未接入此功能，不能使用全局演示或默认账户入口。'})
                 if path.startswith('/api/'):
                     operator=path.startswith(('/api/v1/handoff/','/api/v1/support/'))
                     if account['role']=='admin' and not operator:return h._send(403,{'ok':False,'message':'坐席身份没有银行业务权限。'})
-                    if account['role']=='user' and account['user_id']!='demo-user':return h._send(403,{'ok':False,'message':'当前主体没有绑定可办理的银行账户。'})
-                    if path.startswith('/api/v1/family/'):return h._send(403,{'ok':False,'message':'本批自建身份暂不启用家庭代办；不能复用演示会话绕过。'})
+                    if account['role']=='user' and account['user_id']!='demo-user' and account['user_id'] not in self.rt.bank.guardianships.accounts:return h._send(403,{'ok':False,'message':'当前主体没有绑定可办理的银行账户。'})
                 if path=='/support/operator' and account['role']!='admin':return h._send(403,{'ok':False,'message':'需要坐席身份。'})
                 return callback()
         except PermissionError:

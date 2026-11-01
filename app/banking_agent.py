@@ -38,6 +38,7 @@ from llm_adapter import LLMConfig, LLMIntentAdapter
 from knowledge_service import KnowledgeService, KnowledgeScope, EmbeddingClient
 from ocr_service import OCRService, MAX_IMAGE_BYTES
 from speech_adapter import SpeechAdapter, MAX_AUDIO_BYTES, prepare_audio, VoiceEvidenceStore
+from tts_output import TTSOutput
 from channel_contracts import AgentGateway, UnifiedMessage
 from conversation_context import TransferDraftStore
 from security_controls import SlidingWindowRateLimiter
@@ -46,7 +47,12 @@ from bank_service import BankServiceAdapter, BankServiceError, ProtocolBankFacad
 from operational_readiness import preflight_report
 from preflight import build_payment_preflight
 from domain_agent_contract import DomainContext
-from transaction_agent import TransactionAgent, PaymentSnapshot, AgentMessage
+from transaction_agent import TransactionAgent, PaymentSnapshot, AgentMessage, payment_recovery
+from source_provenance import SourceProvenance
+from service_tasks import ServiceTasks
+from antifraud_semantics import collect as collect_fraud_semantics
+from payment_tasks import resume_payment,payment_policy
+from action_effects import build_transfer_contract, validate_transfer_contract, public_effect_summary, effect_reference
 from domain_agent_registry import DOMAIN_AGENT_REGISTRY
 from domain_snapshots import tool_snapshot, policy_snapshot, family_snapshot, budget_snapshot
 from supervisor import Supervisor, SupervisorError
@@ -149,6 +155,7 @@ TOOL_REGISTRY = {
     "create_cooling_off": {"side_effect": True, "retry": 0},
     "notify_guardian": {"side_effect": True, "retry": 0},
     "financial_health_report": {"side_effect": False, "retry": 1},
+    "check_funding_ready": {"side_effect": False, "retry": 0},
     "list_savings_goals": {"side_effect": False, "retry": 1},
     "create_savings_goal": {"side_effect": True, "retry": 0},
     "idle_cash_check": {"side_effect": False, "retry": 1},
@@ -364,11 +371,19 @@ class AgentPlan:
                 details.append(self.entities['schedule_error'])
         elif self.intent == "subscription_cancel":
             if self.entities.get('subscription_name'):
-                details.append(f"建议取消的订阅：{self.entities['subscription_name']}")
+                details.append(f"申请停止扣费的订阅：{self.entities['subscription_name']}")
                 details.append(f"每期金额：{money(self.entities['subscription_amount_cents'])}（取消不会扣款）")
-            details.append("授权层：本次将停止未来扣费，不等于终止服务。")
+            details.append("授权层：确认后先核验办理条件；符合条件才提交停止未来扣费申请，结果以回执为准。")
             details.append("服务层：服务可能仍有效到订阅有效期结束；退款金额与状态需单独核验。")
             details.append("交易层：历史扣款可查询；未来少扣的钱不算已到账退款。")
+            if not self.entities.get('subscription_id'):
+                details = ['本次只查询订阅列表，不取消任何订阅。选择具体项目后，需要重新确认办理。']
+        elif self.intent == 'card_manage':
+            if self.entities.get('card_operation') == 'unreport_loss':
+                details.append('请先确认卡片已找回且由本人保管，再确认解挂。卡片尚未找回时请保持挂失。')
+                details.append('解挂后仍需核对余额、限额及付款条件，不代表所有付款立即恢复。')
+            if self.entities.get('unloss_block_reason'):
+                details.append(self.entities['unloss_block_reason'])
         elif self.intent == "fraud_guard":
             details.append("系统发现这笔转账可能涉及诈骗话术或异常收款人。")
             details.append(f"不会扣钱，先暂停{POLICY['cooling_off_hours']}小时，并提醒已授权的守护家人。")
@@ -412,7 +427,7 @@ class AgentPlan:
         elif self.intent == "subscription_cancel":
             plain_summary = self.summary
         elif self.intent == "card_manage":
-            plain_summary = "帮你看看卡片情况，再决定下一步怎么办"
+            plain_summary = self.summary
         elif self.intent == "fraud_guard":
             plain_summary = "这笔转账看起来有被骗的风险，我先帮你停下来核实"
         elif self.intent == "financial_health":
@@ -435,7 +450,11 @@ class AgentPlan:
             "protective_block": self.intent == "fraud_guard",
             "details": details,
             "preflight": self.preflight,
+            "payment_recovery": self.coordination.get("payment_recovery", {}),
+            "domain_reviews": self.coordination.get("domain_reviews", {}),
+            "effect_summary": public_effect_summary(self.entities.get("_effect_contract")),
             "steps": public_steps,
+            "domain_guidance": self.coordination.get('domain_guidance'),
             "confirmation_hint": "请核对收款人、金额和备注，确认无误后再执行。" if self.intent == "transfer" else "请确认以上操作后再继续。",
             "created_at": self.created_at,
             # 这是绑定当前 plan_id 的一次性操作凭据，前端只作为不可读 opaque token 传回。
@@ -444,6 +463,26 @@ class AgentPlan:
 
 
 # ----------------------------- presentation -------------------------------
+def card_label(card):
+    tail = card.get('last4')
+    suffix = f'尾号{tail}' if isinstance(tail, str) and re.fullmatch(r'[0-9]{4}', tail) else '尾号待核实'
+    return f"{card.get('name') or '银行卡'}（{suffix}）"
+
+
+def subscription_label(item):
+    amount = item.get('amount_cents')
+    price = money(amount) if type(amount) is int and amount >= 0 else '待核实'
+    return f"{item.get('merchant') or '待核验订阅'}（每期金额：{price}）"
+
+
+def unqualified_card_request(text):
+    # Only generic wording may default to the sole known card. Any remaining
+    # issuer, product, ordinal or account qualifier requires explicit selection.
+    return re.fullmatch(r'(?:请|麻烦|帮我|帮忙|给我|为我|我|本人|的|银行卡|卡片|卡|'
+                        r'办理|申请|进行|一下|先|再|已经|已|了|丢失|丢|不见|找回|找到|'
+                        r'挂失|解挂|解除|取消|[\s，,。.!！;；])+', text) is not None
+
+
 def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
     """把机器执行结果转换成用户可读文字；不接受模型生成的数字作为事实来源。"""
     if result.get("status") == "PAUSED":
@@ -452,6 +491,10 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
     if result.get("status") == "DEFERRED":
         return {"ok": False, "status": "DEFERRED", "title": "交易已暂缓", "user_message": result.get("error") or "交易已暂缓，未发生扣款，请联系人工核实。", "trace_id": plan.trace_id}
     receipt = result.get("receipt")
+    if (getattr(plan, 'intent', '') in {'subscription_cancel', 'card_manage'} and result.get('status') == 'FAILED' and result.get('error')):
+        return {'ok':False, 'status':'FAILED', 'title':'请先核实办理条件',
+                'user_message':result['error'],
+                'trace_id':plan.trace_id, 'receipt':receipt}
     if isinstance(receipt, dict) and receipt.get("status") in {"UNKNOWN", "PARTIAL", "FAILED", "PROCESSING"}:
         if getattr(plan, "intent", "") == "subscription_cancel" and receipt.get("status") == "UNKNOWN":
             data = next((item.get("data", {}) for item in result.get("results", [])
@@ -517,8 +560,9 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
         descriptions = []
         for item in active:
             service = item.get("service_layer", {})
-            descriptions.append(f"{item.get('merchant', '未命名服务')}（{'、'.join(item.get('governance_markers', []))}；服务有效至{service.get('valid_until', '待核验')}）")
-        message = "当前有 " + str(len(active)) + " 项服务有效的订阅：" + "、".join(descriptions) + "。" if active else "当前没有能确认仍有效的订阅。"
+            descriptions.append(f"{item.get('merchant', '未命名服务')}（{'、'.join(item.get('governance_markers', []))}；记录中的到期日：{service.get('valid_until', '待核验')}）")
+        message = ("查询记录中有 " + str(len(active)) + " 项服务标记为有效：" + "、".join(descriptions)
+                   + "。当前使用权益请向服务商核实。") if active else "本次记录中没有标记为有效的服务，实际使用权益请向服务商核实。"
     elif plan.intent == "subscription_cancel":
         data = data_by_tool.get("cancel_subscription", {})
         layers = data.get("layers", {})
@@ -526,8 +570,10 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
         service = layers.get("service", {})
         refund = layers.get("refund", {})
         message = (f"已确认停止未来扣费（订阅：{data.get('merchant', '该订阅')}）；"
-                   f"服务仍有效至{service.get('valid_until', '待核验')}；"
+                   f"服务记录中的到期日为{service.get('valid_until', '待核验')}，当前使用权益请向服务商核实；"
                    f"退款状态待核验（金额 {money(refund.get('amount_cents', 0))}，不是已到账退款）。") if data else "订阅取消操作没有返回可核验结果。"
+        if not plan.entities.get('subscription_id') and 'list_subscriptions' in data_by_tool:
+            message = '已查询订阅列表，请选择具体项目后核对新计划。本次未取消任何订阅。'
     elif plan.intent == "transfer":
         data = data_by_tool.get("create_transfer", {})
         if data.get("transaction_id"):
@@ -547,12 +593,22 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
         operation = plan.entities.get("card_operation")
         data = data_by_tool.get("verify_card_status", {})
         status = data.get("status")
-        if operation == "report_loss" and status == "reported_loss":
+        no_op = any(item.get('data', {}).get('no_op') for item in tool_results)
+        if no_op and status in {'reported_loss', '挂失', '正常', 'normal', 'active'}:
+            message = (f"卡片末四位 {data.get('last4', '未知')} 已挂失，无需重复挂失；本次仅核验状态。"
+                       if operation == 'report_loss' else
+                       f"卡片末四位 {data.get('last4', '未知')} 状态正常，无需解挂；本次仅核验状态。")
+        elif operation == "report_loss" and status in {"reported_loss", "挂失"}:
             message = f"卡片末四位 {data.get('last4', '未知')} 已挂失，银行返回的最终状态为已挂失。"
-        elif operation == "unreport_loss" and status == "正常":
+        elif operation == "unreport_loss" and status in {"正常", "normal", "active"}:
             message = f"卡片末四位 {data.get('last4', '未知')} 已解挂，银行返回的最终状态为正常。"
         else:
-            message = "已读取卡片状态，下一步需要人工确认具体卡片操作。"
+            cards = data_by_tool.get('list_cards', {}).get('items', [])
+            states = {'正常':'正常', 'normal':'正常', 'active':'正常', 'reported_loss':'已挂失', '挂失':'已挂失'}
+            message = ('卡片状态：' + '；'.join(f"{card_label(c)}：{states.get(c.get('status'), '待核实')}" for c in cards)
+                       + '。本次仅查询，未办理挂失或解挂。') if cards else '本次查询范围内未发现卡片。'
+            if plan.entities.get('unloss_block_reason'):
+                message += plan.entities['unloss_block_reason']
         if data.get('service_scope') in {'LOCAL_PROTOCOL_TEST','FINERACT_LOCAL_SIMULATOR'}:
             message='本地卡管协议演示：'+message.replace('银行返回','服务替身返回')
     elif plan.intent == "fraud_guard":
@@ -593,6 +649,7 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
                 )
             else:
                 message = data.get("summary", "已生成财务健康报告。")
+        if data.get('funding_plan'):message += data['funding_plan']['message'] + (' 当前资金缺口 '+yuan(data['funding_plan']['shortfall_cents']) if data['funding_plan']['shortfall_cents'] is not None else ' 当前资金事实尚未核实。')
     elif plan.intent == "family_co_management":
         action = plan.entities.get("action", "overview")
         if action == "set_allowance":
@@ -611,7 +668,7 @@ def present_result(plan: AgentPlan, result: Dict[str, Any]) -> Dict[str, Any]:
 
 # C7: trusted configuration affects display text only, never machine facts or policy.
 class PlainLanguage:
-    FALLBACK = {"触发增强认证策略": "为了保护您的钱，请再确认一次", "强验证": "再次核对身份", "强认证": "再次核对身份"}
+    FALLBACK = {"触发增强认证策略": "为保障您的账户安全，请完成身份验证", "强验证": "身份验证", "强认证": "身份验证"}
 
     def __init__(self, path: Optional[Path] = None):
         self.configuration_status = "loaded"
@@ -693,7 +750,7 @@ def voice_audit_evidence(evidence):
     result=dict(evidence)
     for key,value in result.items():
         pattern=(r'asr_[0-9a-f]{32}' if key=='provider_request_id' else r'trace_[0-9a-f]{32}' if key=='source_trace_id' else
-                 r'[0-9a-f]{64}' if key in {'upload_sha256','pcm_sha256','normalized_wav_sha256'} else None)
+                 r'[0-9a-f]{64}' if key in {'upload_sha256','pcm_sha256','normalized_wav_sha256','text_sha256'} else None)
         if pattern and isinstance(value,str) and re.fullmatch(pattern,value):result[key]=_VoiceAuditIdentifier(value)
     return result
 
@@ -702,7 +759,7 @@ def sanitize_audit_value(value: Any, key: str = "") -> Any:
     """审计边界脱敏：手机号/卡号/证件号/验证码不以完整明文落盘或输出。"""
     if type(value) is _VoiceAuditIdentifier:
         pattern=(r'asr_[0-9a-f]{32}' if key=='provider_request_id' else r'trace_[0-9a-f]{32}' if key=='source_trace_id' else
-                 r'[0-9a-f]{64}' if key in {'upload_sha256','pcm_sha256','normalized_wav_sha256'} else None)
+                 r'[0-9a-f]{64}' if key in {'upload_sha256','pcm_sha256','normalized_wav_sha256','text_sha256'} else None)
         if pattern and re.fullmatch(pattern,value):return str(value)
     sensitive_key = any(token in key.casefold() for token in (
         "phone", "mobile", "card", "account", "identity", "id_card", "id_number", "身份证",
@@ -812,6 +869,10 @@ class AuditStore:
                                  ("tool_name", "TEXT"), ("timestamp", "TEXT")):
             if name not in columns:
                 self.db.execute(f"ALTER TABLE audit_events ADD COLUMN {name} {definition}")
+        # Append reads must not scan/sort the growing audit payload on every event.
+        # Non-unique indexes preserve legacy rows, identity rules and hash verification.
+        self.db.execute("CREATE INDEX IF NOT EXISTS audit_seq_lookup ON audit_events(seq DESC,id DESC) WHERE seq IS NOT NULL")
+        self.db.execute("CREATE INDEX IF NOT EXISTS audit_trace_lookup ON audit_events(trace_id,seq DESC,id DESC)")
         self.db.execute(
             """CREATE TABLE IF NOT EXISTS linkage_tasks (
                 task_id TEXT PRIMARY KEY,
@@ -1414,15 +1475,19 @@ class MockBankCore:
         固化 confirmed 状态；本演示不把历史交易或预计工资当作承诺支出/余额。
         """
         with self.lock:
+            scoped=[x for x in self.confirmed_commitments if x.get('actor_id','demo-user')==actor_id and x.get('status')=='confirmed']
+            if any(type(x.get('amount_cents')) is not int or x['amount_cents']<0 for x in scoped):
+                return ToolResult(False,'confirmed_budget_commitments',error_code='INVALID_BUDGET_FACTS',error_message='已确认支出金额不合法，请先核对资料。')
             items = [dict(item) for item in self.confirmed_commitments
                      if item.get("status") == "confirmed"
+                     and item.get("actor_id", "demo-user") == actor_id
                      and type(item.get("amount_cents")) is int
                      and item.get("amount_cents", 0) >= 0]
             items.extend({
                 "id": item["id"], "name": f"待付款订阅：{item.get('merchant', '未命名服务')}",
                 "amount_cents": item["amount_cents"], "status": "confirmed",
             } for item in self.subscriptions
-                if item.get("status") == "active"
+                if actor_id == "demo-user" and item.get("status") == "active"
                 and type(item.get("amount_cents")) is int
                 and item.get("amount_cents", 0) >= 0)
             return ToolResult(True, "confirmed_budget_commitments", {
@@ -1430,6 +1495,16 @@ class MockBankCore:
                 "account_owner_id": actor_id,
                 "projected_income_cents": 0,
             })
+
+    def service_transaction_fact(self,transaction_id,actor_id='demo-user') -> ToolResult:
+        with self.lock:
+            item=next((dict(x) for x in self.transactions if x.get('id')==transaction_id and x.get('actor_id','demo-user')==actor_id),None)
+            if item is None:
+                row=self._row_for_transaction(transaction_id)
+                if row and row['actor_id']==actor_id:
+                    item={'id':row['transaction_id'],'amount_cents':-row['amount_cents'],'merchant':'本地转账记录','status':row['status'],'date':row['created_at']}
+            if item is None:return ToolResult(False,'service_transaction_fact',error_code='TRANSACTION_NOT_AVAILABLE',error_message='无法核对该账户的交易记录。')
+            return ToolResult(True,'service_transaction_fact',item)
 
     def recent_transactions(self, actor_id="demo-user") -> ToolResult:
         with self.lock:
@@ -1613,6 +1688,11 @@ class MockBankCore:
             sub = next((item for item in self.subscriptions if item["id"] == sub_id), None)
             if sub is None:
                 return ToolResult(False, "cancel_subscription", error_code="SUBSCRIPTION_NOT_FOUND", error_message="未找到该订阅。")
+            authorization = sub.get('authorization_layer', {})
+            if (sum(item.get('id') == sub_id for item in self.subscriptions) != 1 or
+                    authorization.get('terminable') is not True or authorization.get('debit_permission') != 'active'):
+                return ToolResult(False, 'cancel_subscription', error_code='SUBSCRIPTION_REVIEW_REQUIRED',
+                                  error_message='当前订阅不满足取消条件，请先核实扣费状态和办理渠道；本次未取消。')
             # Transport uncertainty is not evidence of success or failure. The
             # durable subscription remains unchanged and no automatic retry occurs.
             if self.fault_injection in {"transport_timeout", "network_unreachable"}:
@@ -1716,9 +1796,9 @@ class MockBankCore:
             self.idempotency_results[idempotency_key] = result
             return result
 
-    def financial_health_report(self, actor_id: str = "demo-user") -> ToolResult:
+    def financial_health_report(self, actor_id: str = "demo-user", target_cents=0, reserve_cents=None, deadline=None) -> ToolResult:
         with self.lock:
-            from ledger_views import build_ledger_views
+            from ledger_views import build_ledger_views,build_funding_plan
 
             items = [dict(tx) for tx in self.transactions if tx.get("actor_id", "demo-user") == actor_id]
             # The demo data is one account only.  Do not present it as a complete
@@ -1729,6 +1809,11 @@ class MockBankCore:
                 balances={"available_cents": self.available_balance(actor_id)},
                 coverage={"scope": "演示账户", "complete": False, "updated_at": now_iso()},
             )
+            commitments=self.confirmed_budget_commitments(actor_id)
+            if not commitments.ok:return ToolResult(False,'financial_health_report',error_code='BUDGET_UNKNOWN',error_message='已确认支出尚不能核验。')
+            funding=build_funding_plan(available_cents=views['funds_status']['available_cents'],target_cents=target_cents,
+                reserve_cents=max(POLICY['preflight_security_buffer_cents'],reserve_cents or 0),
+                commitments=commitments.data['items'],deadline=deadline)
             category_totals = dict(views["consumer_view"]["by_category"])
             active_subscriptions = [x for x in self.subscriptions if x.get("status") == "active"]
             subscription_total = sum(x["amount_cents"] for x in active_subscriptions)
@@ -1747,6 +1832,7 @@ class MockBankCore:
                 "summary": summary,
                 "suggestions": ["核实陌生境外商户", "检查不常用的自动扣费", "为旅行或装修建立专门攒钱目标"],
                 "ledger_views": views,
+                "funding_plan": funding,
                 "consumer_view": views["consumer_view"],
                 "cash_flow_view": views["cash_flow_view"],
                 "funds_status": views["funds_status"],
@@ -1924,7 +2010,8 @@ class IntentParser:
     @staticmethod
     def _extract_beneficiary(text: str) -> Optional[str]:
         # “安全账户”是反诈演示中的虚拟收款人，不能因为不存在于通讯录就继续执行。
-        if "安全账户" in text:
+        clause = re.split(r"[，,。；;]|备注|说明", text, maxsplit=1)[0]
+        if "安全账户" in clause:
             return "安全账户"
         if "这个账户" in text or "这个账号" in text:
             return "未知收款账户"
@@ -1934,7 +2021,10 @@ class IntentParser:
         if not match:
             return None
         name = match.group("name")
-        return None if name in {'账', '款'} or any(word in name for word in ("账号", "账户", "卡号", "金额", "账到", "设置", "上限", "限额")) else name
+        # Account-kind wording is not part of the recipient's name. Explicit
+        # account numbers still require verification in the transfer parser.
+        name = re.sub(r'(?:的)?银行卡$', '', name)
+        return None if not name or name in {'账', '款'} or any(word in name for word in ("账号", "账户", "卡号", "金额", "账到", "设置", "上限", "限额")) else name
 
     @staticmethod
     def _birthday_date(text: str) -> str:
@@ -2019,17 +2109,8 @@ class IntentParser:
         return entities
 
     def _fraud_signals(self, text: str, beneficiary: Optional[str], amount_cents: Optional[int]) -> List[str]:
-        lowered = text.casefold()
-        signals = [
-            rule["reason"]
-            for rule in self.fraud_rules["keyword_rules"]
-            if rule["keyword"].casefold() in lowered
-        ]
-        # New/unknown recipients and amounts are risk factors, not scam evidence.
-        # PolicyEngine still scores them and can defer or demand authentication.
-        if beneficiary == "安全账户":
-            signals.append("收款账户无法核验")
-        return list(dict.fromkeys(signals))
+        evidence=collect_fraud_semantics(text,self.fraud_rules['keyword_rules'])
+        return [self.fraud_rules['keyword_rules'][int(code.rsplit('_',1)[1])]['reason'] if code.startswith('local_phrase_') else '本地话术证据：'+code for code in evidence['active_codes']]
 
     def parse(self, text: str) -> Tuple[str, Dict[str, Any]]:
         self.llm.reset_evidence("local_priority")
@@ -2046,12 +2127,40 @@ class IntentParser:
             return 'unknown', {'clarification': 'card_display_only'}
         if '密码' in t and any(word in t for word in ('修改', '重置', '更改')):
             return 'password_change', {}
-        if '解挂' in t:
-            return 'card_manage', {'card_operation': 'unreport_loss', 'card_id': 'card_001'}
-        if any(word in t for word in ('挂失', '卡丢了', '卡丢失', '卡不见了')):
-            return 'card_manage', {'card_operation': 'report_loss', 'card_id': 'card_001'}
-        if '卡片管理' in t or '卡片状态' in t or '银行卡' in t:
+        # Negation and status questions are read requests, before any model or keyword routing.
+        operations = r'挂失|解挂|取消|关闭|关掉|清理'
+        negative = r'(?:不要|不用|不想|不需要|不打算|不同意|不允许|先别|别|暂不|暂时不|并非|不是|没有(?:要|想|要求|让|打算)|不(?=挂失|解挂|取消|关闭|关掉|清理|办理|进行))[^，,。；;！？!?]*(?:' + operations + ')'
+        # Classify action-bearing clauses, not just the position of a keyword.
+        # A later question about refunds must not negate an explicit cancellation.
+        inquiry = r'查询|查一下|看看|咨询|了解|请问|是否|有没有|怎么|如何|怎样|什么|哪些|能否|可否|条件|流程|费用|影响|后果|[吗么?？]|了没有|了没'
+        clauses = re.split(r'[，,。；;！!]', t)
+        read_only = bool(re.search(negative, t) or any(re.search(operations, c) and
+                        (re.search(inquiry, c) or re.search(r'(?:已经|已)(?:取消|关闭|关掉|挂失|解挂)', c)) for c in clauses))
+        subscription_like = any(w in t for w in ('订阅', '会员', '自动扣费', '自动续费', '代扣'))
+        request_prefix = r'(?:请|麻烦|帮我|给我|我要|我想|我需要|我决定|我确认|确认|现在|立即|先)*'
+        requested_cancel = any(
+            re.match(r'^' + request_prefix + r'(?:(?:取消|关闭|关掉|清理)|(?:把|将).*(?:取消|关闭|关掉|清理))', c.strip()) or
+            re.fullmatch(r'(?:我的|这个)?(?:某视频|视频|云盘)?(?:会员|订阅|自动续费|自动扣费|代扣)(?:请|帮我|给我)?(?:取消|关闭|关掉|清理)(?:一下|掉|吧)?', c.strip())
+            for c in clauses)
+        if subscription_like and not requested_cancel and not re.search(r'转账|转给|转\s*\d|汇款|汇给|打款', t):
+            read_only = True
+        if (any(w in t for w in ('解挂', '解除挂失', '取消挂失')) and
+                re.search(r'(?:还没|没有|尚未|未)(?:有)?(?:找回|找到)|不在(?:我|本人).*手', t)):
+            return 'card_manage', {'unloss_block_reason':'卡片尚未找回或不在本人保管时，请保持挂失；找回后再申请解挂。'}
+        if (read_only or re.search(r'(?:取消|撤销)[^，,。；;]*(?:挂失|解挂)(?:申请|操作)', t)) and any(w in t for w in ('卡', '挂失', '解挂')):
             return 'card_manage', {}
+        if read_only and subscription_like:
+            return 'subscription_query', {}
+        card_match = re.fullmatch(r'(挂失|解挂)卡片编号(card_[A-Za-z0-9_-]+)', t)
+        if card_match:
+            return 'card_manage', {'card_operation':'report_loss' if card_match[1]=='挂失' else 'unreport_loss', 'card_id':card_match[2]}
+        subscription_match = re.fullmatch(r'取消订阅编号(sub_[A-Za-z0-9_-]+)', t)
+        if subscription_match:
+            return 'subscription_cancel', {'suggested_subscription_id':subscription_match[1]}
+        if any(word in t for word in ('解挂', '解除挂失', '取消挂失')):
+            return 'card_manage', {'card_operation': 'unreport_loss'}
+        if any(word in t for word in ('挂失', '卡丢了', '卡丢失', '卡不见了')):
+            return 'card_manage', {'card_operation': 'report_loss'}
         # 安全前置：转账相关文本先由本地规则解析，LLM 不能覆盖金额、收款人和反诈判定。
         local_beneficiary = self._extract_beneficiary(t)
         local_amount, local_amount_error = self._extract_amount(t)
@@ -2070,7 +2179,7 @@ class IntentParser:
                 "account_requires_verification": bool(re.search(r"(?:账号|账户|卡号|银行卡|手机号)\s*[:：]?\s*\d", t)),
                 "note": note,
                 "fraud_signals": local_fraud,
-                "fraud_keyword_hit": any(rule["keyword"].casefold() in t.casefold() for rule in self.fraud_rules["keyword_rules"]),
+                "fraud_keyword_hit": bool(local_fraud),
                 "is_new_recipient": bool(local_beneficiary) and local_beneficiary not in {"妈妈", "李明", "张伟"},
             }
             if local_fraud:
@@ -2079,6 +2188,8 @@ class IntentParser:
                 return "fraud_guard", entities
             return "transfer", entities
 
+        if '卡片管理' in t or '卡片状态' in t or '银行卡' in t:
+            return 'card_manage', {}
         # 非资金副作用意图可以使用可选模型；其输出仍只进入受限实体协议。
         llm_result = self.llm.parse(text)
         if llm_result is not None:
@@ -2095,6 +2206,14 @@ class IntentParser:
             return "fraud_guard", {"fraud_signals": ["用户主动请求反诈守护"]}
         if any(k in t for k in ["消费体检", "财务健康", "消费报告", "消费诊断", "这个月我到底花了多少钱", "我这个月花了多少", "这张卡这个月流出了多少", "下周要准备多少钱", "整体财务状况"]):
             return "financial_health", {"action": "report"}
+        if re.search(r'准备[0-9]+(?:\.[0-9]{1,2})?元|资金准备|本月钱.*减少',t):
+            target=re.search(r'准备([0-9]+(?:\.[0-9]{1,2})?)元',t)
+            reserve=re.search(r'(?:至少保留|保留)([0-9]+(?:\.[0-9]{1,2})?)元',t)
+            due=re.search(r'(\d{4}-\d{2}-\d{2})前',t)
+            try:deadline=datetime.fromisoformat(due[1]+'T00:00:00+08:00').isoformat() if due else None
+            except ValueError:deadline=None
+            return 'financial_health',{'action':'report','target_cents':self._amount(target[1])[0] if target else 0,
+                'reserve_cents':self._amount(reserve[1])[0] if reserve else None,'funding_deadline':deadline}
         if any(k in t for k in ["攒钱目标", "旅行基金", "装修基金", "自动攒钱", "存钱目标"]):
             name = "旅行基金" if "旅行" in t else "装修基金" if "装修" in t else "攒钱目标"
             target_match = re.search(r"目标(?:金额)?\s*([+\-]?\d[\d,]*(?:\.\d+)?)\s*元", t)
@@ -2123,8 +2242,8 @@ class IntentParser:
             return "bill_analysis", {}
         if any(k in t for k in ["交易记录", "最近消费", "最近的消费", "流水"]):
             return "transaction_query", {}
-        if any(k in t for k in ["订阅", "自动扣费", "代扣", "会员"]):
-            if any(k in t for k in ["取消", "关闭", "清理"]):
+        if any(k in t for k in ["订阅", "自动扣费", "自动续费", "代扣", "会员"]):
+            if any(k in t for k in ["取消", "关闭", "关掉", "清理"]):
                 sid = "sub_001" if "视频" in t and "云盘" not in t else "sub_002" if "云盘" in t and "视频" not in t else None
                 return "subscription_cancel", {"suggested_subscription_id": sid}
             return "subscription_query", {}
@@ -2155,8 +2274,10 @@ class PolicyEngine:
                 guardian=store.accounts.get(reader,{})
                 valid=(grant is not None and grant.active(store.clock()) and grant.subject_id==subject and
                        context.get('subject_id')==subject and grant.guardian_id==reader and
-                       guardian.get('device_id')==context.get('guardian_device_id') and
+                       store.device_for(reader)==context.get('guardian_device_id') and
                        context.get('mode') in {'delegate','assist'})
+                if valid and store.require_explicit_consent:
+                    consent=store.consent(grant.grant_id);valid=consent['read'] and context.get('consent_version')==consent['version']
                 if not valid:
                     return dict(decision,authz_allowed=False,decision_reason='家庭资料阅读关系无效、过期或已撤销')
             return dict(decision,authz_allowed=True,knowledge_actor=reader,knowledge_subject=subject,
@@ -2186,6 +2307,10 @@ class PolicyEngine:
 
     def classify_tool(self, intent, entities, actor_id, tool):
         decision = self.classify(intent, entities, actor_id)
+        card_operations = {'report_card_loss':'report_loss', 'unreport_card_loss':'unreport_loss'}
+        if tool in card_operations and (intent != 'card_manage' or not entities.get('card_id') or
+                                        entities.get('card_operation') != card_operations[tool]):
+            decision.update(authz_allowed=False, decision_reason='卡片写操作必须绑定明确的卡片和操作')
         if ((tool == 'knowledge_lookup' and intent != 'knowledge_query') or
                 (intent == 'knowledge_query' and tool != 'knowledge_lookup')):
             decision.update(authz_allowed=False, decision_reason='知识问答只允许绑定的只读资料工具')
@@ -2203,6 +2328,12 @@ class PolicyEngine:
         return decision
 
     def _base_classify(self, intent: str, entities: Dict[str, Any], actor_id: str = "demo-user") -> Dict[str, Any]:
+        # Only the platform policy can distinguish a read from a card write.
+        # Family card handling retains its existing owner-auth/handoff boundary.
+        if (intent == 'card_manage' and actor_id == 'demo-user' and not entities.get('_family') and
+                (not entities.get('card_operation') or
+                 (entities.get('card_operation') in {'report_loss', 'unreport_loss'} and not entities.get('card_id')))):
+            return {"risk_level":"green", "requires_confirmation":False, "requires_strong_auth":False}
         if intent == 'knowledge_query':
             return {"risk_level": "green", "requires_confirmation": False, "requires_strong_auth": False}
         if intent in POLICY["green"]:
@@ -2238,15 +2369,41 @@ class Planner:
     def __init__(self, parser: IntentParser, policy: PolicyEngine, bank: MockBankCore):
         self.parser, self.policy, self.bank = parser, policy, bank
 
-    def build(self, text: str, actor_id: str = "demo-user", device_id: str = "demo-device", family_context=None, trace_id: Optional[str] = None) -> AgentPlan:
+    def build(self, text: str, actor_id: str = "demo-user", device_id: str = "demo-device", family_context=None, trace_id: Optional[str] = None, _trusted_transfer_entities=None) -> AgentPlan:
         self.parser.llm.reset_evidence("feature_demo")
         feature_request = FEATURE_REGISTRY.parse_request(text)
-        intent, entities = (FEATURE_INTENT, feature_request) if feature_request is not None else self.parser.parse(text)
+        intent, entities = ('transfer',dict(_trusted_transfer_entities)) if _trusted_transfer_entities is not None else ((FEATURE_INTENT, feature_request) if feature_request is not None else self.parser.parse(text))
         entities = dict(entities)
         entities.pop('_family', None)  # model output can never grant family authority
+        if _trusted_transfer_entities is None:entities.pop('_business_constraints',None)
+        if _trusted_transfer_entities is None and intent in {'transfer','fraud_guard'}:
+            entities['_semantic_risk']=collect_fraud_semantics(text,self.parser.fraud_rules['keyword_rules'])
+            entities['fraud_keyword_hit']=bool(entities['_semantic_risk']['active_codes'])
+        if intent == 'card_manage' and entities.get('card_operation'):
+            selected = entities.get('card_id')
+            tails = re.findall(r'尾号\s*([0-9]{4})(?![0-9])', text)
+            if not selected:
+                candidates = []
+                for card in self.bank.cards:
+                    name = card.get('name')
+                    named = isinstance(name, str) and bool(name) and name in text
+                    if tails and (len(tails) != 1 or card.get('last4') != tails[0]):
+                        continue
+                    if not tails and not named and len(self.bank.cards) != 1:
+                        continue
+                    remainder = text.replace(name, '') if named else text
+                    remainder = re.sub(r'尾号\s*[0-9]{4}(?![0-9])', '', remainder)
+                    if unqualified_card_request(remainder):
+                        candidates.append(card)
+                if len(candidates) == 1:
+                    selected = candidates[0].get('id')
+            matches = [c for c in self.bank.cards if c.get('id') == selected] if selected else []
+            entities['card_id'] = selected if len(matches) == 1 else None
+            entities['card_name'] = card_label(matches[0]) if len(matches) == 1 else None
         if intent == "subscription_cancel":
             candidate = entities.get("suggested_subscription_id") or entities.get("subscription_id")
-            sub = next((x for x in self.bank.subscriptions if x['id'] == candidate), None)
+            matches = [x for x in self.bank.subscriptions if x.get('id') == candidate] if candidate else []
+            sub = matches[0] if len(matches) == 1 else None
             # Reject model-supplied names/prices and bind the exact visible target to consent.
             entities = {"subscription_id": sub['id'] if sub else None,
                         "suggested_subscription_id": candidate,
@@ -2277,18 +2434,22 @@ class Planner:
         elif intent == "subscription_query":
             summary, steps = "查询自动续费与订阅服务", [PlanStep("s1", "读取订阅列表", "list_subscriptions")]
         elif intent == "subscription_cancel":
-            summary = (f"建议取消{entities['subscription_name']}的自动续费（每期{money(entities['subscription_amount_cents'])}），请核对后确认"
-                       if entities.get('subscription_id') else "请说明要取消哪个订阅：视频会员还是云盘会员")
-            steps = [PlanStep("s1", "定位订阅", "list_subscriptions"), PlanStep("s2", "取消订阅", "cancel_subscription")]
+            summary = (f"申请停止{entities['subscription_name']}的自动扣费（每期{money(entities['subscription_amount_cents'])}）；确认后核验办理条件"
+                       if entities.get('subscription_id') else "请先确认查询订阅列表，再选择要停止扣费的项目；本次不取消订阅")
+            steps = [PlanStep("s1", "查询订阅列表", "list_subscriptions")]
+            if entities.get('subscription_id'):
+                steps.append(PlanStep("s2", "取消订阅", "cancel_subscription"))
         elif intent == "card_manage":
             operation = entities.get("card_operation")
             if actor_id in self.bank.guardianships.accounts:
                 summary, steps = "本人强认证后转官方人工办理；演示系统不代办家庭成员的卡片写操作", [PlanStep("s1", "本人认证后人工办理", "human_handoff")]
+            elif not operation or not entities.get('card_id'):
+                summary, steps = '核对卡片状态；选择具体卡片后再创建办理计划', [PlanStep('s1','读取卡片状态','list_cards')]
             elif operation == "report_loss":
-                summary = "挂失银联白金卡；先强验证，再核验挂失后的卡片状态"
+                summary = f"挂失{entities['card_name']}；先强验证，再核验挂失后的卡片状态"
                 steps = [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "挂失卡片", "report_card_loss"), PlanStep("s3", "核验挂失后的卡片状态", "verify_card_status")]
             elif operation == "unreport_loss":
-                summary = "解除银联白金卡挂失；先强验证，再核验恢复后的卡片状态"
+                summary = f"解除{entities['card_name']}挂失；请先确认卡片已找回且由本人保管，再验证身份并确认办理"
                 steps = [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "解除卡片挂失", "unreport_card_loss"), PlanStep("s3", "核验解挂后的卡片状态", "verify_card_status")]
             else:
                 summary, steps = "进入卡片管理流程，需要进一步选择操作", [PlanStep("s1", "读取卡片状态", "list_cards"), PlanStep("s2", "人工确认具体卡片操作", "human_handoff")]
@@ -2334,6 +2495,10 @@ class Planner:
         created_at = now_iso()
         token = secrets.token_urlsafe(32)
         expires_at = (datetime.now(timezone.utc) + timedelta(seconds=TOKEN_TTL_SECONDS)).isoformat(timespec="seconds")
+        entities.pop('_effect_contract',None)
+        if intent == 'transfer':
+            with self.bank.lock:
+                entities['_effect_contract'] = build_transfer_contract(plan_id,actor_id,device_id,entities,steps,expires_at,POLICY,self.bank,TOOL_REGISTRY)
         canonical = json.dumps({"plan_id": plan_id, "intent": intent, "entities": entities, "steps": [asdict(x) for x in steps]}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         return AgentPlan(plan_id, trace_id, intent, summary, policy["risk_level"], policy["requires_confirmation"], policy["requires_strong_auth"], entities, steps, created_at, token, expires_at, actor_id, digest, device_id, risk_assessment=policy)
@@ -2491,6 +2656,8 @@ class AgentRuntime(RecoveryMixin):
         self.family = FamilyAccess(self)
         self.identity_service = IdentityService(self) if identity_mode=='self-hosted' else None
         self.init_recovery(storage_path, AgentPlan, PlanStep, AuthCredential, AuthBinding)
+        self.service_tasks=ServiceTasks(self)
+        self.sources=SourceProvenance(self)
         if self.dag_store is not None:
             migrate_linkage_to_dag(self.audit, self.dag_store)
             for dag in self.dag_store.list_all():
@@ -2538,7 +2705,39 @@ class AgentRuntime(RecoveryMixin):
         # Optional analysis after a tool must not erase its actual result or retry it.
         try:
             review = self.supervisor.observe(ctx, domain, snapshot_factory())
+            plan.coordination.setdefault('domain_reviews',{}).update(review.summary()['domain_reviews'])
+            plan.coordination['evidence_status']='needs_review' if any(x.get('status')!='ready' for x in plan.coordination['domain_reviews'].values()) else 'ready'
             finding, proposal = (message.payload for message in review.messages)
+            if domain in {'subscription', 'card'}:
+                choices = []
+                values = next((f['value'] for f in finding.facts if f.get('name') == ('subscriptions' if domain == 'subscription' else 'cards')), ())
+                for item in values:
+                    item_id = item.get('id')
+                    if not isinstance(item_id, str) or not re.fullmatch(r'(?:sub|card)_[A-Za-z0-9_-]+', item_id):
+                        continue
+                    if sum(other.get('id') == item_id for other in values) != 1:
+                        continue
+                    if domain == 'subscription':
+                        distinguishable = sum(subscription_label(other) == subscription_label(item) for other in values) == 1
+                        eligible = distinguishable and item.get('terminable') and item.get('debit_state') == 'active'
+                        choices.append({'label':subscription_label(item),
+                            'detail': ('可申请停止扣费' if eligible else '需核实扣费状态或办理渠道') if distinguishable else '订阅信息相同，请联系人工核实',
+                            'request':'取消订阅编号' + item_id if eligible else ''})
+                    else:
+                        status = item.get('status')
+                        operation = '挂失' if status in ('normal','active','正常') else '解挂' if status in ('reported_loss','挂失') else ''
+                        distinguishable = sum(card_label(other) == card_label(item) for other in values) == 1
+                        choices.append({'label':card_label(item),
+                                        'detail': ('已挂失' if operation == '解挂' else '正常' if operation else '状态待核实') if distinguishable else '卡片信息相同，请联系人工核实',
+                                        'request':operation + '卡片编号' + item_id if operation and distinguishable and not plan.entities.get('unloss_block_reason') else ''})
+                plan.coordination['domain_guidance'] = {
+                    'domain':domain, 'title':'订阅办理核验' if domain == 'subscription' else '卡片办理核验',
+                    'notes':list(finding.recommendations), 'choices':choices,
+                    'phase':'本次查询时的资料；办理结果以回执为准',
+                }
+                plan.coordination['domain_review'] = {'domain':domain, 'ready':review.status == 'ready',
+                                                     'tools':[s['tool'] for s in proposal.suggested_steps],
+                                                     'signals':list(finding.risk_signals)}
             envelope = review.messages[0]
             self.audit.write(plan.trace_id, 'domain.' + domain + '.analyzed', {
                 'mode':'ADVISORY_ONLY', 'domain':domain, 'fact_count':len(finding.facts),
@@ -2550,6 +2749,12 @@ class AgentRuntime(RecoveryMixin):
                 {'domain':domain,'phase':'existing_evidence','status':review.status,
                  'conflict_keys':[c['key'] for c in review.conflicts]}, actor=plan.actor_id, intent=plan.intent)
         except Exception:
+            plan.coordination.setdefault('domain_reviews',{})[domain]={'status':'needs_review','authority':'advisory_only','fact_count':0,'missing_count':1,'sources':[]}
+            plan.coordination['evidence_status']='needs_review'
+            if domain in {'subscription', 'card'}:
+                plan.coordination['domain_review'] = {'domain':domain, 'ready':False, 'tools':[]}
+                plan.coordination['domain_guidance'] = {'domain':domain,'title':'办理资料需核实',
+                    'notes':['领域核验暂不可用，后续写操作已停止；已取得的工具回执仍保留。'], 'choices':[], 'phase':'请核实后重新办理'}
             self.audit.write(plan.trace_id, 'domain.' + domain + '.unavailable',
                 {'mode':'ADVISORY_ONLY', 'reason':'domain_analysis_unavailable', 'bank_result_unchanged':True}, actor=plan.actor_id)
 
@@ -2884,6 +3089,13 @@ class AgentRuntime(RecoveryMixin):
         if result is not None:
             payload["result"] = result
             payload["result_view"] = present_result(plan, result)
+            guidance = payload['plan_view'].get('domain_guidance')
+            if guidance and plan.intent == 'subscription_cancel' and plan.entities.get('subscription_id'):
+                guidance = copy.deepcopy(guidance)
+                guidance['phase'] = '办理前查询的资料；是否停止扣费以本次回执为准'
+                guidance['choices'] = []
+                guidance['notes'] = [note for note in guidance['notes'] if not note.startswith('可以提出')]
+                payload['plan_view']['domain_guidance'] = guidance
         payload.update(extra)
         # A review card is not necessarily a pending executable plan. Never advertise
         # confirmation for clarification, rejection or a completed/deferred result.
@@ -2898,152 +3110,17 @@ class AgentRuntime(RecoveryMixin):
         payload["plan_view"]["deferred"] = bool(result and result.get("status") == "DEFERRED")
         return payload
 
-    def _refresh_payment_preflight(self, plan: AgentPlan) -> Dict[str, Any]:
-        """在确认/副作用边界重新读取预算事实；计划卡不是执行保证。"""
-        report = build_payment_preflight(
-            self.bank,
-            POLICY,
-            amount_cents=plan.entities.get("amount_cents"),
-            beneficiary=plan.entities.get("beneficiary"),
-            actor_id=plan.actor_id,
-            account_requires_verification=bool(plan.entities.get("account_requires_verification")),
-            requires_confirmation=plan.requires_confirmation,
-            requires_strong_auth=plan.requires_strong_auth,
-        )
-        plan.preflight = report.to_dict()
-        self.audit.write(
-            plan.trace_id,
-            "payment.preflight",
-            {"plan_id": plan.plan_id, "operation": "transfer", "preflight": plan.preflight, "phase": "confirmation"},
-            actor=plan.actor_id,
-            risk_level=plan.risk_level,
-            intent=plan.intent,
-        )
-        return plan.preflight
+    def resume_payment_task(self,task_id,expected_version,changes,actor_id,device_id,*,query_only=False):
+        return resume_payment(self,task_id,expected_version,changes,actor_id,device_id,
+                              policy=POLICY,registry=TOOL_REGISTRY,query_only=query_only)
 
-    def _transfer_details(self, plan: AgentPlan, message: str) -> Dict[str, Any]:
-        self.audit.write(plan.trace_id, "transfer.details_required", {
-            "plan_id": plan.plan_id, "reason": "recipient_or_amount_requires_review",
-        }, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
-        return self._response(plan, message, awaiting_details=True, transfer_draft={
-            "beneficiary": plan.entities.get("beneficiary"),
-            "account_requires_verification": bool(plan.entities.get("account_requires_verification")),
-            "amount_cents": plan.entities.get("amount_cents"),
-            "note": plan.entities.get("note", ""),
-        })
-
-    def _validate_token(self, plan_id: str, action_token: str) -> Tuple[Optional[AgentPlan], Optional[Dict[str, Any]]]:
-        with self.lock:
-            plan = self.pending.get(plan_id)
-            if not plan:
-                consumed = self.consumed_confirmations.get(plan_id)
-                digest = hashlib.sha256(str(action_token).encode()).hexdigest()
-                if consumed and hmac.compare_digest(consumed["token_digest"], digest):
-                    self.audit.write(consumed["trace_id"], "consent.replay", {"plan_id": plan_id, "reason": "already_consumed"}, actor=consumed["actor_id"], risk_level=consumed["risk_level"], intent=consumed["intent"])
-                return None, {"ok": False, "message": "操作计划不存在、已完成或已过期。"}
-            if not action_token or not hmac.compare_digest(str(plan.consent_token), str(action_token)):
-                self.audit.write(plan.trace_id, "consent.rejected", {"plan_id": plan_id, "reason": "invalid_action_token"}, risk_level=plan.risk_level, intent=plan.intent)
-                return None, {"ok": False, "message": "操作凭据无效，不能执行这笔操作。"}
-            try:
-                if datetime.now(timezone.utc) >= datetime.fromisoformat(plan.token_expires_at):
-                    self.pending.pop(plan_id, None)
-                    return None, {"ok": False, "message": "操作确认已过期，请重新发起需求。"}
-            except (TypeError, ValueError):
-                self.pending.pop(plan_id, None)
-                return None, {"ok": False, "message": "操作确认已失效，请重新发起需求。"}
-            if plan.consent_token in self.consumed_tokens:
-                self.audit.write(plan.trace_id, "consent.replay", {"plan_id": plan_id, "reason": "already_consumed"}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
-                return None, {"ok": False, "message": "这张确认卡片已经使用过，不能重复执行。"}
-            if plan_id in self.executing:
-                self.audit.write(plan.trace_id, "consent.replay", {"plan_id": plan_id, "reason": "in_progress"}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
-                return None, {"ok": False, "message": "这笔操作正在处理中，请不要重复点击。"}
-            canonical = json.dumps({"plan_id": plan.plan_id, "intent": plan.intent, "entities": plan.entities, "steps": [asdict(x) for x in plan.steps]}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
-            if not hmac.compare_digest(plan.entity_digest, hashlib.sha256(canonical.encode("utf-8")).hexdigest()):
-                credential = self.auth_credentials.get(self.authenticated_credential.get(plan_id, ""))
-                if credential is not None:
-                    credential.invalidated_reason = "binding_changed"
-                    self.audit.write(plan.trace_id, "auth.invalidated", {"plan_id": plan_id, "credential_id": credential.credential_id, "reason": "binding_changed"}, risk_level=plan.risk_level, intent=plan.intent)
-                return None, {"ok": False, "error_code": "AUTH_BINDING_MISMATCH", "message": "操作内容已变化，请重新发起需求。"}
-            return plan, None
-
-    def _invalid_input(self, plan: AgentPlan) -> bool:
-        if plan.intent == "transfer":
-            return not plan.entities.get("beneficiary") or not isinstance(plan.entities.get("amount_cents"), int) or plan.entities.get("amount_cents", 0) <= 0 or bool(plan.entities.get("amount_error"))
-        if plan.intent == "financial_health" and plan.entities.get("action") == "savings_goal":
-            return not isinstance(plan.entities.get("target_cents"), int) or plan.entities.get("target_cents", 0) <= 0 or bool(plan.entities.get("amount_error"))
-        if plan.intent == "family_co_management" and plan.entities.get("action") == "set_allowance":
-            return not isinstance(plan.entities.get("allowance_cents"), int) or plan.entities.get("allowance_cents", 0) <= 0 or bool(plan.entities.get("amount_error"))
-        return False
-
-    @audit_action
-    @durable_action
-    def chat(self, text: str, actor_id: str = "demo-user", session_id: str = "web-demo", device_id: str = "demo-device", family_context=None, trace_id: Optional[str] = None, channel: str = "internal") -> Dict[str, Any]:
-        if self.identity_service:
-            identity=self.identity_service.current_identity()
-            if not identity or identity['role']!='user' or identity['user_id']!=actor_id or actor_id!='demo-user' or identity['device_id']!=device_id or family_context is not None:
-                return self.family.deny('当前身份、设备或账户授权未通过，不能提交业务。',actor=actor_id,device=device_id)
-        # Conversation identifiers scope memory, never identity or permission.
-        key = (actor_id, device_id, channel, session_id)
-        with self.conversation_context.turn(key) as context:
-            if family_context is not None or actor_id in self.bank.guardianships.accounts:
-                context = None  # family/delegated drafts need a separate reviewed contract
-            return self._chat(text, actor_id, session_id, device_id, family_context, trace_id, context, channel)
-
-    def _chat(self, text, actor_id, session_id, device_id, family_context, trace_id, context, channel):
-        trace = trace_id or new_id("trace")
-        if self.breaker.is_locked():
-            self.audit.write(trace, "request.blocked", {"reason": "circuit_breaker_locked"}, actor=actor_id)
-            return {"ok": False, "trace_id": trace, "message": "安全熔断已触发，当前会话已锁定，请联系人工客服。", "breaker": self.breaker.state()}
-        allowed, reason = InjectionGuard.inspect(text)
-        if not allowed:
-            self.audit.write(trace, "injection_blocked", {"input_length": len(text), "reason": reason}, actor=actor_id)
-            return {"ok": False, "trace_id": trace, "message": reason, "blocked": True}
-        # 离线最小披露规则：不回显原始敏感输入，不把泄露请求交给模型。
-        if re.search(r"(系统提示词|系统提示|内部提示词)|((完整|全部|明文|不.{0,2}脱敏).{0,12}(卡号|身份证))|((卡号|身份证).{0,12}(完整|全部|明文|不.{0,2}脱敏))", text):
-            self.audit.write(trace, "data.disclosure.blocked", {"input_length": len(text), "reason": "sensitive_disclosure_request"}, actor=actor_id)
-            return {"ok": False, "trace_id": trace, "message": "为保护隐私，不能提供完整卡号、身份证号码或内部系统提示词。可以查询脱敏的卡片状态。", "blocked": True}
-        # 仅可信入口分配 trace；计划、工具与审计沿用同一条回放链。
-        resolved = context.resolve(text) if context is not None else text
-        plan = self.planner.build(resolved, actor_id=actor_id, device_id=device_id, family_context=family_context, trace_id=trace)
-        if resolved != text:
-            self.audit.write(trace, 'context.draft.applied', {'scope': 'transfer_clarification',
-                             'requires_fresh_confirmation': True}, actor=actor_id)
-        self.audit.write(plan.trace_id, "input.received", {"input_length": len(text)}, actor=plan.actor_id)
-        self.audit.write(plan.trace_id, "injection.checked", {"allowed": True}, actor=plan.actor_id)
-        self.audit.write(plan.trace_id, "parser.result", {
-            **self.parser.llm.evidence, "plan_id": plan.plan_id, "intent": plan.intent,
-        }, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
-        self.audit.write(plan.trace_id, "plan.created", {"input_length": len(text), "plan": plan.as_dict(include_token=False)}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
-        self._record_policy(plan, plan.risk_assessment, "planning")
-        if plan.risk_assessment.get("authz_allowed") is False:
-            return self.family.deny(plan.risk_assessment["decision_reason"], plan)
-        if plan.intent == "unknown":
-            return self._response(plan, plan.summary)
-        if plan.intent == 'birthday_linkage' and plan.entities.get('schedule_error'):
-            return self._response(plan, plan.entities['schedule_error'], blocked=True)
-        if plan.intent == "subscription_cancel" and not plan.entities.get("subscription_id"):
-            result = self.execute(plan)  # read-only lookup followed by a rejected cancellation step
-            response = self._response(plan, result['error'], result, blocked=True)
-            response['ok'] = False
-            return response
-        if self._invalid_input(plan):
-            if context is not None and plan.intent == 'transfer':
-                context.remember(plan.entities)
-                if context.next_draft is not None:
-                    missing = ('收款人和转账金额' if not plan.entities.get('beneficiary') and not plan.entities.get('amount_cents')
-                               else '收款人' if not plan.entities.get('beneficiary') else '转账金额')
-                    response = self._transfer_details(plan, f'请补充{missing}。补齐后会重新展示计划，确认前不会转账。')
-                    response['conversation_followup'] = True
-                    return response
-            message = plan.entities.get("amount_error") or "信息不完整或金额不合法，未创建任何转账或扣款。"
-            self.audit.write(plan.trace_id, "business_input.blocked", {"message": message, "entities": {k: v for k, v in plan.entities.items() if k != "raw"}}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
-            if plan.intent == "transfer" and not plan.entities.get("amount_error"):
-                return self._transfer_details(plan, "请补充收款账户和转账金额；信息齐全后再核对确认，目前没有扣款。")
-            return self._response(plan, message, blocked=True)
+    def _prepare_payment_review(self,plan,text,session_id,channel,family_context):
+        """Shared read-only preflight/Supervisor path for chat and explicit reprepare."""
+        actor_id,device_id=plan.actor_id,plan.device_id
         if plan.intent == "transfer" and strict_positive_int(plan.entities.get("amount_cents")):
             preflight = build_payment_preflight(
                 self.bank,
-                POLICY,
+                payment_policy(POLICY,plan.entities),
                 amount_cents=plan.entities["amount_cents"],
                 beneficiary=plan.entities.get("beneficiary"),
                 actor_id=plan.actor_id,
@@ -3077,6 +3154,8 @@ class AgentRuntime(RecoveryMixin):
                         self.bank.guardianships.get(family.get('grant_id', '')), self.bank.guardianships.clock())
                 review = self.supervisor.coordinate(domain_context, plan.intent, sources)
                 plan.coordination = review.summary()
+                recovery = plan.coordination.get('payment_recovery', {})
+                plan.preflight['budget_options'] = [x['action'] for x in recovery.get('user_options', [])] if recovery.get('status') == 'needs_user_choice' else []
                 finding, proposal = (message.payload for message in review.messages if message.sender == 'payment')
                 envelope = next(message for message in review.messages if message.sender == 'payment')
                 self.audit.write(plan.trace_id, 'domain.payment.analyzed', {
@@ -3130,6 +3209,163 @@ class AgentRuntime(RecoveryMixin):
                 )
                 response["ok"] = False
                 return response
+
+    def _refresh_payment_preflight(self, plan: AgentPlan) -> Dict[str, Any]:
+        """在确认/副作用边界重新读取预算事实；计划卡不是执行保证。"""
+        report = build_payment_preflight(
+            self.bank,
+            payment_policy(POLICY,plan.entities),
+            amount_cents=plan.entities.get("amount_cents"),
+            beneficiary=plan.entities.get("beneficiary"),
+            actor_id=plan.actor_id,
+            account_requires_verification=bool(plan.entities.get("account_requires_verification")),
+            requires_confirmation=plan.requires_confirmation,
+            requires_strong_auth=plan.requires_strong_auth,
+        )
+        plan.preflight = report.to_dict()
+        recovery = payment_recovery(plan.preflight)
+        plan.coordination['payment_recovery'] = recovery
+        plan.preflight['budget_options'] = [x['action'] for x in recovery['user_options']] if recovery['status'] == 'needs_user_choice' else []
+        self.audit.write(
+            plan.trace_id,
+            "payment.preflight",
+            {"plan_id": plan.plan_id, "operation": "transfer", "preflight": plan.preflight, "phase": "confirmation"},
+            actor=plan.actor_id,
+            risk_level=plan.risk_level,
+            intent=plan.intent,
+        )
+        return plan.preflight
+
+    def _transfer_details(self, plan: AgentPlan, message: str) -> Dict[str, Any]:
+        self.audit.write(plan.trace_id, "transfer.details_required", {
+            "plan_id": plan.plan_id, "reason": "recipient_or_amount_requires_review",
+        }, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+        return self._response(plan, message, awaiting_details=True, transfer_draft={
+            "beneficiary": plan.entities.get("beneficiary"),
+            "account_requires_verification": bool(plan.entities.get("account_requires_verification")),
+            "amount_cents": plan.entities.get("amount_cents"),
+            "note": plan.entities.get("note", ""),
+        })
+
+    def _validate_token(self, plan_id: str, action_token: str) -> Tuple[Optional[AgentPlan], Optional[Dict[str, Any]]]:
+        with self.lock:
+            plan = self.pending.get(plan_id)
+            if not plan:
+                consumed = self.consumed_confirmations.get(plan_id)
+                digest = hashlib.sha256(str(action_token).encode()).hexdigest()
+                if consumed and hmac.compare_digest(consumed["token_digest"], digest):
+                    self.audit.write(consumed["trace_id"], "consent.replay", {"plan_id": plan_id, "reason": "already_consumed"}, actor=consumed["actor_id"], risk_level=consumed["risk_level"], intent=consumed["intent"])
+                return None, {"ok": False, "message": "操作计划不存在、已完成或已过期。"}
+            if not action_token or not hmac.compare_digest(str(plan.consent_token), str(action_token)):
+                self.audit.write(plan.trace_id, "consent.rejected", {"plan_id": plan_id, "reason": "invalid_action_token"}, risk_level=plan.risk_level, intent=plan.intent)
+                return None, {"ok": False, "message": "操作凭据无效，不能执行这笔操作。"}
+            try:
+                if datetime.now(timezone.utc) >= datetime.fromisoformat(plan.token_expires_at):
+                    self.pending.pop(plan_id, None)
+                    return None, {"ok": False, "message": "操作确认已过期，请重新发起需求。"}
+            except (TypeError, ValueError):
+                self.pending.pop(plan_id, None)
+                return None, {"ok": False, "message": "操作确认已失效，请重新发起需求。"}
+            if plan.consent_token in self.consumed_tokens:
+                self.audit.write(plan.trace_id, "consent.replay", {"plan_id": plan_id, "reason": "already_consumed"}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+                return None, {"ok": False, "message": "这张确认卡片已经使用过，不能重复执行。"}
+            if plan_id in self.executing:
+                self.audit.write(plan.trace_id, "consent.replay", {"plan_id": plan_id, "reason": "in_progress"}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+                return None, {"ok": False, "message": "这笔操作正在处理中，请不要重复点击。"}
+            if plan.intent == 'transfer':
+                effect_error = validate_transfer_contract(plan,POLICY,self.bank,TOOL_REGISTRY,recheck_target=False)
+                issued = self.recovery_store.get(plan_id)
+                original = issued[1].get('plan',{}) if issued else {}
+                if not effect_error and (not original or original.get('entity_digest') != plan.entity_digest or original.get('consent_token') != plan.consent_token):
+                    effect_error = 'EFFECT_REVIEW_REQUIRED'
+                if effect_error:
+                    credential=self.auth_credentials.latest_for(plan_id)
+                    if credential is not None:credential.invalidated_reason='binding_changed'
+                    self.audit.write(plan.trace_id,'effect.binding.rejected',{'plan_id':plan_id,'reason':effect_error},actor=plan.actor_id,intent='transfer')
+                    return None,{'ok':False,'error_code':effect_error,'message':'本次动作范围或收款资料已变化，请重新发起需求，或从任务记录重新核对并准备确认。'}
+            canonical = json.dumps({"plan_id": plan.plan_id, "intent": plan.intent, "entities": plan.entities, "steps": [asdict(x) for x in plan.steps]}, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            if not hmac.compare_digest(plan.entity_digest, hashlib.sha256(canonical.encode("utf-8")).hexdigest()):
+                credential = self.auth_credentials.get(self.authenticated_credential.get(plan_id, ""))
+                if credential is not None:
+                    credential.invalidated_reason = "binding_changed"
+                    self.audit.write(plan.trace_id, "auth.invalidated", {"plan_id": plan_id, "credential_id": credential.credential_id, "reason": "binding_changed"}, risk_level=plan.risk_level, intent=plan.intent)
+                return None, {"ok": False, "error_code": "AUTH_BINDING_MISMATCH", "message": "操作内容已变化，请重新发起需求。"}
+            return plan, None
+
+    def _invalid_input(self, plan: AgentPlan) -> bool:
+        if plan.intent == "transfer":
+            return not plan.entities.get("beneficiary") or not isinstance(plan.entities.get("amount_cents"), int) or plan.entities.get("amount_cents", 0) <= 0 or bool(plan.entities.get("amount_error"))
+        if plan.intent == "financial_health" and plan.entities.get("action") == "savings_goal":
+            return not isinstance(plan.entities.get("target_cents"), int) or plan.entities.get("target_cents", 0) <= 0 or bool(plan.entities.get("amount_error"))
+        if plan.intent == "family_co_management" and plan.entities.get("action") == "set_allowance":
+            return not isinstance(plan.entities.get("allowance_cents"), int) or plan.entities.get("allowance_cents", 0) <= 0 or bool(plan.entities.get("amount_error"))
+        return False
+
+    @audit_action
+    @durable_action
+    def chat(self, text: str, actor_id: str = "demo-user", session_id: str = "web-demo", device_id: str = "demo-device", family_context=None, trace_id: Optional[str] = None, channel: str = "internal") -> Dict[str, Any]:
+        if self.identity_service:
+            identity=self.identity_service.current_identity()
+            own=bool(identity and identity['user_id']==actor_id and identity['device_id']==device_id and (actor_id=='demo-user' or actor_id in self.bank.guardianships.accounts) and family_context is None)
+            assisted=bool(identity and family_context and identity['user_id']==family_context.get('guardian_id') and identity['device_id']==family_context.get('guardian_device_id') and actor_id==family_context.get('subject_id') and device_id==self.bank.guardianships.device_for(actor_id) and family_context.get('mode')=='assist')
+            if not identity or identity['role']!='user' or not (own or assisted):
+                return self.family.deny('当前身份、设备或账户授权未通过，不能提交业务。',actor=actor_id,device=device_id)
+        # Conversation identifiers scope memory, never identity or permission.
+        key = (actor_id, device_id, channel, session_id)
+        with self.conversation_context.turn(key) as context:
+            if family_context is not None or actor_id in self.bank.guardianships.accounts:
+                context = None  # family/delegated drafts need a separate reviewed contract
+            return self._chat(text, actor_id, session_id, device_id, family_context, trace_id, context, channel)
+
+    def _chat(self, text, actor_id, session_id, device_id, family_context, trace_id, context, channel):
+        trace = trace_id or new_id("trace")
+        if self.breaker.is_locked():
+            self.audit.write(trace, "request.blocked", {"reason": "circuit_breaker_locked"}, actor=actor_id)
+            return {"ok": False, "trace_id": trace, "message": "安全熔断已触发，当前会话已锁定，请联系人工客服。", "breaker": self.breaker.state()}
+        allowed, reason = InjectionGuard.inspect(text)
+        if not allowed:
+            self.audit.write(trace, "injection_blocked", {"input_length": len(text), "reason": reason}, actor=actor_id)
+            return {"ok": False, "trace_id": trace, "message": reason, "blocked": True}
+        # 离线最小披露规则：不回显原始敏感输入，不把泄露请求交给模型。
+        if re.search(r"(系统提示词|系统提示|内部提示词)|((完整|全部|明文|不.{0,2}脱敏).{0,12}(卡号|身份证))|((卡号|身份证).{0,12}(完整|全部|明文|不.{0,2}脱敏))", text):
+            self.audit.write(trace, "data.disclosure.blocked", {"input_length": len(text), "reason": "sensitive_disclosure_request"}, actor=actor_id)
+            return {"ok": False, "trace_id": trace, "message": "为保护隐私，不能提供完整卡号、身份证号码或内部系统提示词。可以查询脱敏的卡片状态。", "blocked": True}
+        # 仅可信入口分配 trace；计划、工具与审计沿用同一条回放链。
+        resolved = context.resolve(text) if context is not None else text
+        plan = self.planner.build(resolved, actor_id=actor_id, device_id=device_id, family_context=family_context, trace_id=trace)
+        if resolved != text:
+            self.audit.write(trace, 'context.draft.applied', {'scope': 'transfer_clarification',
+                             'requires_fresh_confirmation': True}, actor=actor_id)
+        self.audit.write(plan.trace_id, "input.received", {"input_length": len(text)}, actor=plan.actor_id)
+        self.audit.write(plan.trace_id, "injection.checked", {"allowed": True}, actor=plan.actor_id)
+        self.audit.write(plan.trace_id, "parser.result", {
+            **self.parser.llm.evidence, "plan_id": plan.plan_id, "intent": plan.intent,
+        }, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+        self.audit.write(plan.trace_id, "plan.created", {"input_length": len(text), "plan": plan.as_dict(include_token=False)}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+        self._record_policy(plan, plan.risk_assessment, "planning")
+        if plan.risk_assessment.get("authz_allowed") is False:
+            return self.family.deny(plan.risk_assessment["decision_reason"], plan)
+        if plan.intent == "unknown":
+            return self._response(plan, plan.summary)
+        if plan.intent == 'birthday_linkage' and plan.entities.get('schedule_error'):
+            return self._response(plan, plan.entities['schedule_error'], blocked=True)
+        if self._invalid_input(plan):
+            if context is not None and plan.intent == 'transfer':
+                context.remember(plan.entities)
+                if context.next_draft is not None:
+                    missing = ('收款人和转账金额' if not plan.entities.get('beneficiary') and not plan.entities.get('amount_cents')
+                               else '收款人' if not plan.entities.get('beneficiary') else '转账金额')
+                    response = self._transfer_details(plan, f'请补充{missing}。补齐后会重新展示计划，确认前不会转账。')
+                    response['conversation_followup'] = True
+                    return response
+            message = plan.entities.get("amount_error") or "信息不完整或金额不合法，未创建任何转账或扣款。"
+            self.audit.write(plan.trace_id, "business_input.blocked", {"message": message, "entities": {k: v for k, v in plan.entities.items() if k != "raw"}}, actor=plan.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+            if plan.intent == "transfer" and not plan.entities.get("amount_error"):
+                return self._transfer_details(plan, "请补充收款账户和转账金额；信息齐全后再核对确认，目前没有扣款。")
+            return self._response(plan, message, blocked=True)
+        payment_review = self._prepare_payment_review(plan,text,session_id,channel,family_context)
+        if payment_review is not None:
+            return payment_review
         if plan.risk_level == "red" and self.is_user_frozen(plan.actor_id):
             message = "检测到审计证据链异常，高风险操作已冻结，请联系人工解锁。"
             self.audit.write(plan.trace_id, "security.freeze.blocked", {"plan_id": plan.plan_id, "user_id": plan.actor_id, "reason": "audit_tamper"}, actor=plan.actor_id, risk_level="red", intent=plan.intent)
@@ -3216,7 +3452,7 @@ class AgentRuntime(RecoveryMixin):
         self.auth_plan_snapshots[plan.plan_id] = plan
         self.audit.write(plan.trace_id, "auth.challenged", {"plan_id": plan.plan_id, "credential_id": credential.credential_id,
                           "binding": self._auth_payload(credential), "reason": "strong_auth_required"}, risk_level="red", intent=plan.intent)
-        response = self._response(plan, "当前操作需要强验证，请完成短信验证码或人脸识别。", needs_auth=True)
+        response = self._response(plan, "为保障您的账户安全，请在验证窗口完成身份验证。验证码仅用于本次验证，请勿向他人提供。", needs_auth=True)
         response["auth_challenge"] = {"credential_id": credential.credential_id, "expires_at": credential.expires_at.isoformat(),
                                        "binding": asdict(credential.binding)}
         if self.identity_service:
@@ -3252,8 +3488,39 @@ class AgentRuntime(RecoveryMixin):
         identity_error = self.family.check_identity(plan, actor_id, device_id, "confirm")
         if identity_error:
             return identity_error
+        if plan.risk_level == "red" and self.is_user_frozen(plan.actor_id):
+            response = self._response(plan, "检测到审计证据链异常，高风险操作已冻结，请联系人工解锁。", blocked=True)
+            response["ok"] = False
+            return response
+        if not plan.entities.get("_family") and actor_id and actor_id != plan.actor_id:
+            return self._auth_reject(plan, None, "AUTH_BINDING_MISMATCH", "用户身份已变化，请重新认证。")
+        if not plan.entities.get("_family") and device_id and device_id != plan.device_id:
+            self.audit.write(plan.trace_id, "device.risk", {"task_id": plan.plan_id, "decision_reason": "设备与绑定凭证不一致"}, actor=plan.actor_id, risk_level="red", intent=plan.intent)
+            self._publish_risk_event(plan, "device.risk", "设备与绑定凭证不一致")
+            return self._auth_reject(plan, None, "AUTH_BINDING_MISMATCH", "设备已变化，请重新认证。")
+        live_policy = self.policy.classify(plan.intent, plan.entities, plan.actor_id)
+        self._record_policy(plan, live_policy, "confirmation")
+        if live_policy.get("authz_allowed") is False:
+            return self.family.deny(live_policy["decision_reason"], plan, actor_id)
+        if plan.intent == "transfer" and live_policy.get("defer"):
+            return self._defer_transfer(plan)
         if plan.intent == "transfer":
+            effect_error=validate_transfer_contract(plan,POLICY,self.bank,TOOL_REGISTRY)
+            if effect_error:
+                self.audit.write(plan.trace_id,'effect.binding.rejected',{'plan_id':plan_id,'reason':effect_error,'phase':'confirmation'},actor=plan.actor_id,intent='transfer')
+                response=self._response(plan,'最晚提交时间已过，请重新核对时间；未办理付款。' if effect_error=='BUSINESS_DEADLINE_EXPIRED' else '收款资料或动作范围已变化，请从任务记录重新核对并生成确认卡。',blocked=True)
+                response.update(ok=False,error_code=effect_error)
+                return response
             preflight = self._refresh_payment_preflight(plan)
+            recovery = plan.coordination['payment_recovery']
+            if recovery['status'] in {'needs_review', 'needs_clarification'}:
+                self.audit.write(plan.trace_id, 'payment.recovery.blocked',
+                    {'plan_id':plan.plan_id,'phase':'confirmation','status':recovery['status'],
+                     'checks':[x['check'] for x in recovery['blockers']]}, actor=plan.actor_id, intent='transfer')
+                response = self._response(plan, '支付资料已变化或尚未核实，请先核对再继续办理。',
+                    blocked=True, review_options=[x['action'] for x in recovery['user_options']])
+                response['ok'] = False
+                return response
             budget = preflight.get("checks", {}).get("budget", {})
             if budget.get("status") == "missing":
                 options = preflight.get("budget_options", [])
@@ -3275,22 +3542,6 @@ class AgentRuntime(RecoveryMixin):
                 )
                 response["ok"] = False
                 return response
-        if plan.risk_level == "red" and self.is_user_frozen(plan.actor_id):
-            response = self._response(plan, "检测到审计证据链异常，高风险操作已冻结，请联系人工解锁。", blocked=True)
-            response["ok"] = False
-            return response
-        if not plan.entities.get("_family") and actor_id and actor_id != plan.actor_id:
-            return self._auth_reject(plan, None, "AUTH_BINDING_MISMATCH", "用户身份已变化，请重新认证。")
-        if not plan.entities.get("_family") and device_id and device_id != plan.device_id:
-            self.audit.write(plan.trace_id, "device.risk", {"task_id": plan.plan_id, "decision_reason": "设备与绑定凭证不一致"}, actor=plan.actor_id, risk_level="red", intent=plan.intent)
-            self._publish_risk_event(plan, "device.risk", "设备与绑定凭证不一致")
-            return self._auth_reject(plan, None, "AUTH_BINDING_MISMATCH", "设备已变化，请重新认证。")
-        live_policy = self.policy.classify(plan.intent, plan.entities, plan.actor_id)
-        self._record_policy(plan, live_policy, "confirmation")
-        if live_policy.get("authz_allowed") is False:
-            return self.family.deny(live_policy["decision_reason"], plan, actor_id)
-        if plan.intent == "transfer" and live_policy.get("defer"):
-            return self._defer_transfer(plan)
         if live_policy.get("requires_strong_auth"):
             credential = self._credential_for(plan, credential_id)
             if credential is None:
@@ -3328,7 +3579,7 @@ class AgentRuntime(RecoveryMixin):
                 "trace_id": plan.trace_id, "actor_id": plan.actor_id, "risk_level": plan.risk_level,
                 "intent": plan.intent, "token_digest": hashlib.sha256(plan.consent_token.encode()).hexdigest(),
             }
-        self.audit.write(plan.trace_id, "consent.granted", {"plan_id": plan_id, "token_bound": True, "one_time_consumed": True}, risk_level=plan.risk_level, intent=plan.intent)
+        self.audit.write(plan.trace_id, "consent.granted", {"plan_id": plan_id, "token_bound": True, "one_time_consumed": True, "effect_ref": effect_reference(plan.entities["_effect_contract"]) if plan.intent=="transfer" else ""}, risk_level=plan.risk_level, intent=plan.intent)
         # Durable one-way gate before any side effect; recovery only queries, never retries.
         self.save_task_checkpoint(plan, "processing")
         result = self.execute(plan)
@@ -3394,7 +3645,7 @@ class AgentRuntime(RecoveryMixin):
             self.authenticated.add(plan_id)
             self.authenticated_credential[plan_id] = credential.credential_id
         self.audit.write(plan.trace_id, "auth.passed", {"plan_id": plan_id, "credential_id": credential.credential_id, "binding": self._auth_payload(credential)}, risk_level=plan.risk_level, intent=plan.intent)
-        response = self._response(plan, "强验证通过，请再次确认执行。")
+        response = self._response(plan, "身份验证已通过。请核对本次办理内容，确认无误后提交。")
         response["credential_id"] = credential.credential_id
         return response
 
@@ -3447,6 +3698,8 @@ class AgentRuntime(RecoveryMixin):
                 return {'ok':False,'error_code':'SECURITY_FROZEN','message':'安全状态不允许重新编排。'}
             allowed_reads=[name for name in ('get_balance','list_transactions','analyze_bills')
                 if self.policy.classify_tool(plan.intent,plan.entities,plan.actor_id,name).get('authz_allowed') is not False]
+            if self.bank_service is None and plan.actor_id=='demo-user' and plan.intent=='transfer':
+                allowed_reads += ['financial_health_report','check_funding_ready']
             try:
                 source='user_structured'
                 if proposal is None:
@@ -3475,6 +3728,8 @@ class AgentRuntime(RecoveryMixin):
                 updated.entities['_dynamic_dag_sha256']=digest
                 updated.consent_token=secrets.token_urlsafe(32)
                 updated.token_expires_at=(datetime.now(timezone.utc)+timedelta(seconds=TOKEN_TTL_SECONDS)).isoformat()
+                if updated.intent=='transfer':
+                    updated.entities['_effect_contract']=build_transfer_contract(updated.plan_id,updated.actor_id,updated.device_id,updated.entities,updated.steps,updated.token_expires_at,POLICY,self.bank,TOOL_REGISTRY)
                 updated.entity_digest=self._auth_digest(updated)
                 self.dag_store.save(reviewed.dag,{'event_type':'dag.dynamic.adopted','source':source,'budget':reviewed.budget})
                 DagExecutor(reviewed.dag,lambda *a: (_ for _ in ()).throw(ValueError('no authority before new confirmation')),self.dag_store.checkpoint).run()
@@ -3750,6 +4005,9 @@ class AgentRuntime(RecoveryMixin):
         plan.token_expires_at = (datetime.now(timezone.utc) + timedelta(seconds=TOKEN_TTL_SECONDS)).isoformat()
         canonical = json.dumps({'plan_id': plan.plan_id, 'intent': plan.intent, 'entities': plan.entities,
                                 'steps': [asdict(x) for x in plan.steps]}, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+        if plan.intent=='transfer':
+            plan.entities['_effect_contract']=build_transfer_contract(plan.plan_id,plan.actor_id,plan.device_id,plan.entities,plan.steps,plan.token_expires_at,POLICY,self.bank,TOOL_REGISTRY)
+            canonical=json.dumps({'plan_id':plan.plan_id,'intent':plan.intent,'entities':plan.entities,'steps':[asdict(x) for x in plan.steps]},ensure_ascii=False,sort_keys=True,separators=(',',':'))
         plan.entity_digest = hashlib.sha256(canonical.encode()).hexdigest()
         live = self.policy.classify(plan.intent, plan.entities, plan.actor_id)
         self._record_policy(plan, live, 'dag_resume')
@@ -3952,6 +4210,8 @@ class AgentRuntime(RecoveryMixin):
                         "unreport_card_loss": "card.unloss.completed",
                         "verify_card_status": "card.status.verified",
                     }[step.tool]
+                    if result.data.get('no_op'):
+                        event_type = 'card.operation.not_needed'
                     self.audit.write(
                         plan.trace_id,
                         event_type,
@@ -4036,12 +4296,52 @@ class AgentRuntime(RecoveryMixin):
             self._observe_domain(plan, domain, ctx, lambda: tool_snapshot(ctx, domain, result))
         return result
 
+    def _check_funding_dependency(self,plan,step):
+        def denied():return ToolResult(False,'check_funding_ready',error_code='FUNDING_EVIDENCE_UNSATISFIED',error_message='本次财务条件未满足、过期或来源不能核验；未提交转账。')
+        if plan.intent!='transfer' or plan.actor_id!='demo-user' or self.bank_service is not None or not _DAG_TOOL_KEY.get() or self.dag_store is None:return denied()
+        dag=self.dag_store.get('plan-'+plan.plan_id)
+        if not dag or dag.metadata.get('source')!='dynamic_plan':return denied()
+        nodes={n.node_id:n for n in dag.nodes};node=nodes.get(step.id)
+        if not node or node.tool!='check_funding_ready':return denied()
+        parents=set(node.depends_on);queue=list(parents)
+        while queue:
+            for parent in nodes[queue.pop()].depends_on:
+                if parent not in parents:parents.add(parent);queue.append(parent)
+        reports=[nodes[key] for key in parents if nodes[key].tool=='financial_health_report' and nodes[key].status=='succeeded']
+        if len(reports)!=1:return denied()
+        output=reports[0].result.get('execution',{}).get('output',{})
+        items=[x.get('data',{}) for x in output.get('results',[]) if x.get('tool')=='financial_health_report']
+        if len(items)!=1:return denied()
+        funding=items[0].get('funding_plan',{})
+        try:
+            observed=datetime.fromisoformat(funding['observed_at'])
+            if observed.tzinfo is None or not -60<=(datetime.now(timezone.utc)-observed).total_seconds()<=300:return denied()
+        except (TypeError,ValueError,KeyError):return denied()
+        if funding.get('source')!='ledger_views.py:build_funding_plan' or funding.get('status')!='ready_now' or type(funding.get('target_cents')) is not int or funding['target_cents']!=plan.entities.get('amount_cents') or funding.get('shortfall_cents')!=0:return denied()
+        return ToolResult(True,'check_funding_ready',{'satisfied':True,'authority':'read_only_condition_not_authorization','source_node_id':reports[0].node_id,'target_cents':funding['target_cents'],'observed_at':funding['observed_at']})
+
     def _execute_authorized_step(self, plan: AgentPlan, step: PlanStep) -> ToolResult:
         e = plan.entities
         live = self.policy.classify_tool(plan.intent, e, plan.actor_id, step.tool)
         if live.get('authz_allowed') is False:
             denied = self.family.deny(live['decision_reason'], plan)
             return ToolResult(False, step.tool, error_code='AUTHZ_DENIED', error_message=denied['message'])
+        if step.tool == 'check_funding_ready':return self._check_funding_dependency(plan,step)
+        if (step.tool in {'report_card_loss', 'unreport_card_loss'} or
+                (step.tool == 'cancel_subscription' and e.get('subscription_id'))):
+            review = plan.coordination.get('domain_review', {})
+            expected_signal = {'report_card_loss':'card_already_lost', 'unreport_card_loss':'card_already_normal'}.get(step.tool)
+            if expected_signal and review.get('ready') and expected_signal in review.get('signals', ()):
+                # Recheck via a read; never call a write adapter to acknowledge an existing state.
+                current = self.bank.card_status_query(e['card_id'], plan.actor_id, plan.trace_id)
+                expected_states = {'reported_loss', '挂失'} if step.tool == 'report_card_loss' else {'正常', 'normal', 'active'}
+                if current.ok and current.data.get('status') in expected_states:
+                    return ToolResult(True, step.tool, dict(current.data, no_op=True), trace_id=plan.trace_id)
+                return ToolResult(False, step.tool, error_code='CARD_STATE_CHANGED',
+                                  error_message='卡片状态已变化或未能核实，请重新查询后办理。本次未执行写操作。')
+            if not review.get('ready') or step.tool not in review.get('tools', ()):
+                return ToolResult(False, step.tool, error_code='DOMAIN_REVIEW_REQUIRED',
+                                  error_message='本次资料尚不满足办理条件，或无需重复操作。请核实下方说明；本次未执行该操作。')
         if step.tool == 'knowledge_lookup':
             scope=KnowledgeScope(live['knowledge_actor'],live['knowledge_subject'],live['knowledge_delegated'])
             def access_check():
@@ -4061,6 +4361,7 @@ class AgentRuntime(RecoveryMixin):
                 'model':data['model'],'retrieval':data.get('retrieval',{}),
                 'reader':scope.actor_id,'subject':scope.subject_id,'delegated':scope.delegated},
                 actor=scope.actor_id, risk_level=plan.risk_level, intent=plan.intent)
+            self.sources.capture_rag(plan,data,scope)
             return ToolResult(True, step.tool, data)
         if FEATURE_REGISTRY.get(step.tool) is not None:
             return ToolResult(**FEATURE_REGISTRY.execute(self, plan, step, live))
@@ -4092,8 +4393,8 @@ class AgentRuntime(RecoveryMixin):
             )
         if step.tool == "verify_card_status":
             result = self.bank.card_status_query(e.get("card_id", "card_001"), plan.actor_id, plan.trace_id)
-            expected = "reported_loss" if e.get("card_operation") == "report_loss" else "正常"
-            if result.ok and result.data.get("status") != expected:
+            expected = {'reported_loss', '挂失'} if e.get("card_operation") == "report_loss" else {'正常', 'normal', 'active'}
+            if result.ok and result.data.get("status") not in expected:
                 return ToolResult(False, step.tool, result.data, error_code="CARD_STATUS_MISMATCH",
                                   error_message="卡片最终状态与本次操作不一致，已停止并保留审计记录。",
                                   trace_id=plan.trace_id)
@@ -4130,6 +4431,16 @@ class AgentRuntime(RecoveryMixin):
                 self.audit.write(plan.trace_id, "precondition.rechecked", {"tool": step.tool, "amount_cents": e.get("amount_cents")}, risk_level=plan.risk_level, intent=plan.intent)
                 if not recheck.ok:
                     return recheck
+                effect_error=validate_transfer_contract(plan,POLICY,self.bank,TOOL_REGISTRY)
+                if effect_error:
+                    self.audit.write(plan.trace_id,'effect.binding.rejected',{'plan_id':plan.plan_id,'reason':effect_error,'phase':'before_side_effect'},actor=plan.actor_id,intent='transfer')
+                    return ToolResult(False,step.tool,error_code=effect_error,error_message='最晚提交时间已过，未提交付款，请重新核对时间。' if effect_error=='BUSINESS_DEADLINE_EXPIRED' else '付款前收款资料或动作范围已变化，请重新核对。')
+                if e.get('_business_constraints',{}).get('reserve_cents') is not None or e.get('_dynamic_dag_sha256'):
+                    current=build_payment_preflight(self.bank,payment_policy(POLICY,e),amount_cents=amount,
+                        beneficiary=e.get('beneficiary'),actor_id=plan.actor_id,requires_confirmation=True,
+                        requires_strong_auth=plan.requires_strong_auth)
+                    if current['checks']['budget']['status']!='satisfied':
+                        return ToolResult(False,step.tool,error_code='BUSINESS_RESERVE_UNMET',error_message='保留金额或预算事实已变化，请重新核对；未提交付款。')
                 ctx = e.get('_family')
                 if ctx:
                     final_policy = self.policy.classify('transfer', e, plan.actor_id)
@@ -4156,7 +4467,7 @@ class AgentRuntime(RecoveryMixin):
             receipts = self.notifications.list_notifications(plan.actor_id, plan.trace_id, "guardian")
             receipt = next((r for r in receipts if r["event_type"] == "fraud.blocked" and r["status"] == "LOCAL_QUEUED"), None)
             return self.bank.notify_guardian(e.get("case_id") or "unknown-case", e.get("beneficiary") or "未知收款账户", e.get("amount_cents") or 0, (_DAG_TOOL_KEY.get() or f"idem:{plan.plan_id}:notify_guardian"), plan.actor_id, receipt)
-        if step.tool == "financial_health_report": return self.bank.financial_health_report(plan.actor_id)
+        if step.tool == "financial_health_report": return self.bank.financial_health_report(plan.actor_id,target_cents=(e.get('amount_cents') if plan.intent=='transfer' else e.get('target_cents')) or 0,reserve_cents=(e.get('_business_constraints',{}).get('reserve_cents') if plan.intent=='transfer' else e.get('reserve_cents')),deadline=e.get('funding_deadline'))
         if step.tool == "list_savings_goals": return self.bank.list_savings_goals()
         if step.tool == "create_savings_goal": return self.bank.create_savings_goal(e.get("goal_name") or "攒钱目标", e.get("target_cents") or 0, e.get("monthly_cents"), (_DAG_TOOL_KEY.get() or f"idem:{plan.plan_id}:create_savings_goal"))
         if step.tool == "idle_cash_check": return self.bank.idle_cash_check()
@@ -4192,11 +4503,14 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-store")
+        if (urlparse(self.path).path == '/api/v1/voice/synthesize'
+                and re.fullmatch(r'trace_[0-9a-f]{32}', getattr(self, '_tts_trace_id', ''))):
+            self.send_header('X-Trace-ID', self._tts_trace_id)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Permissions-Policy", "camera=(), geolocation=(), payment=()")
-        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; connect-src 'self'; media-src 'self' blob:; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'")
         for cookie in getattr(self,'_identity_response_cookies',[]):self.send_header('Set-Cookie',cookie)
         self._identity_response_cookies=[]
         self.end_headers()
@@ -4234,9 +4548,21 @@ class Handler(BaseHTTPRequestHandler):
         query = {k: v[0] for k, v in parse_qs(urlparse(self.path).query).items()}
         family_identity = runtime.family.http_context(
             getattr(self, 'headers', {}).get('Authorization', ''), query,
-            required=path in {'/api/state', '/api/audit', '/api/v1/transactions/status'} or path.startswith('/api/v1/audit/') or path.startswith('/api/dag/') or path.startswith('/api/v1/bank/') or path.startswith('/api/v1/support/'))
+            required=path in {'/api/state', '/api/audit', '/api/v1/transactions/status'} or path.startswith('/api/v1/audit/') or path.startswith('/api/dag/') or path.startswith('/api/v1/bank/') or path.startswith('/api/v1/support/') or path.startswith('/api/v1/business-tasks') or path.startswith('/api/v1/family/') or path.startswith('/api/v1/service-tasks'))
         if not family_identity['ok']:
             return self._send(403, family_identity)
+        if path.startswith('/api/v1/service-tasks'):
+            try:
+                result={'items':runtime.service_tasks.list(family_identity['user_id'],family_identity['device_id'])} if path=='/api/v1/service-tasks' else {'task':runtime.service_tasks.get(path.rsplit('/',1)[-1],family_identity['user_id'],family_identity['device_id'])}
+                return self._send(200 if 'items' in result or result.get('task') else 404,{'ok':bool('items' in result or result.get('task')),**result})
+            except PermissionError:return self._send(403,{'ok':False,'message':'当前账户或设备无法查看服务记录。'})
+        if path == '/api/v1/business-tasks':
+            return self._send(200, {'ok':True,'read_only':True,'items':runtime.business_tasks.list(family_identity['user_id'],family_identity['device_id'])})
+        if path.startswith('/api/v1/business-tasks/'):
+            task_id=path.rsplit('/',1)[-1]
+            task=runtime.business_tasks.get(task_id,family_identity['user_id'],family_identity['device_id'])
+            if task:task['source_materials']=runtime.sources.for_task(task_id,family_identity['user_id'],family_identity['device_id'])
+            return self._send(200 if task else 404,{'ok':bool(task),'read_only':True,'task':task})
         if path=='/api/v1/support/capabilities':return self._send(200,{'ok':True,'mode':'SELF_HOSTED_SUPPORT','manual_acceptance_available':False,
             'third_party_bank_customer_service':False,'production_identity':False,'bank_business_executed':False})
         if path=='/api/v1/bank/capabilities':
@@ -4254,6 +4580,8 @@ class Handler(BaseHTTPRequestHandler):
             response = runtime.dag_control('state', str(query.get('dag_id', '')),
                                            family_identity['user_id'], family_identity['device_id'])
             return self._send(200 if response['ok'] else 403, response)
+        if path == '/api/v1/family/permissions':
+            return self._send(200,{'ok':True,'items':runtime.family.permission_records(family_identity['user_id']),'mode':'local_owner_consent' if runtime.identity_service else 'offline_fixture'})
         if path in {'/api/v1/family/grants', '/api/v1/family/notifications'}:
             if not family_identity.get('family'):
                 return self._send(403, runtime.family.deny('家庭入口需要可信登录会话'))
@@ -4349,6 +4677,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {"ok": True, "trace_id": trace_id, "count": len(events), "events": events})
         if path == "/":
             return self._send(200, (STATIC_DIR / "index.html").read_bytes(), "text/html; charset=utf-8")
+        if path == "/api/v1/voice/output-capabilities":
+            return self._send(200, TTSOutput().capabilities())
         if path.startswith("/static/"):
             target = (STATIC_DIR / path.removeprefix("/static/")).resolve()
             if STATIC_DIR.resolve() in target.parents and target.exists():
@@ -4424,7 +4754,7 @@ class Handler(BaseHTTPRequestHandler):
             outbound=True
             result=adapter.transcribe(audio)
             if result.get('ok'):
-                try:token=runtime.voice_evidence.issue(evidence,identity['user_id'],identity['device_id'],trace)
+                try:token=runtime.voice_evidence.issue(dict(evidence,transcript_sha256=hashlib.sha256(result['text'].strip().encode()).hexdigest()),identity['user_id'],identity['device_id'],trace)
                 except ValueError:return finish(429,SpeechAdapter.failure('evidence_limit'))
                 result=dict(result,voice_source_token=token,requires_text_review=True)
         finally:
@@ -4464,6 +4794,55 @@ class Handler(BaseHTTPRequestHandler):
              'fields':list(result.get('fields',{})),'flags':result.get('flags',[]),'source':'local_ocr_untrusted_draft'},actor=identity['user_id'])
         return self._send(200 if result['ok'] else (429 if result.get('reason')=='busy' else 400),dict(result,trace_id=trace))
 
+    def _synthesize_voice(self, body, identity):
+        """Audited, optional text output; never an action or bank receipt."""
+        trace = self._tts_trace_id = 'trace_' + uuid.uuid4().hex
+        trusted = identity.get('ok') is True
+        actor = identity.get('user_id', 'unknown') if trusted else 'unknown'
+        device = identity.get('device_id', 'unknown') if trusted else 'unknown'
+        common = {'device_id': device, 'consent': body.get('consent') is True,
+                  'provider': 'microsoft_edge_community', 'business_executed': False,
+                  'retention': 'request_memory_only', 'provider_delivery_verified': False}
+        metadata = {}
+
+        def record(event, reason, attempted=False):
+            runtime.audit.write(trace, event, dict(common, **metadata, reason=reason,
+                outbound_attempted=attempted), actor=actor)
+
+        def unavailable():
+            return self._send(503, {'ok': False, 'reason': 'audit_unavailable',
+                'message': '语音服务暂不可用，请阅读页面文字。本次未办理银行业务。',
+                'trace_id': trace, 'business_executed': False})
+
+        if not trusted:
+            try: record('tts.rejected', 'identity_required')
+            except Exception: return unavailable()
+            return self._send(403, {'ok': False, 'reason': 'identity_required',
+                'message': '请先验证当前会话。', 'trace_id': trace, 'business_executed': False})
+        try: record('tts.requested', 'received')
+        except Exception: return unavailable()
+
+        def before_outbound(safe_metadata):
+            safe_metadata = voice_audit_evidence(safe_metadata)
+            metadata.update({key: safe_metadata[key] for key in ('text_sha256', 'text_characters')})
+            # This records an authorized attempt, not a provider delivery receipt.
+            record('tts.outbound', 'authorized_attempt', attempted=True)
+
+        result = TTSOutput().synthesize(body.get('text'), consent=body.get('consent'),
+            voice=body.get('voice', 'zh-CN-XiaoxiaoNeural'), rate=body.get('rate', -8),
+            before_outbound=before_outbound)
+        reason = result.get('reason', 'completed')
+        attempted = result.get('outbound_attempted') is True
+        rejected = reason in {'consent_required', 'invalid_request', 'unavailable', 'busy', 'audit_required'}
+        event = 'tts.completed' if result['ok'] else 'tts.rejected' if rejected else 'tts.failed'
+        try: record(event, reason, attempted)
+        except Exception: return unavailable()
+        if result['ok']:
+            return self._send(200, result['audio'], 'audio/mpeg')
+        status = 400 if reason in {'invalid_request', 'consent_required'} else 429 if reason == 'busy' else 503
+        return self._send(status, {key: result[key] for key in ('ok', 'reason', 'message')} |
+                          {'trace_id': trace, 'business_executed': False})
+
     def do_POST(self):
         service=getattr(runtime,'identity_service',None)
         if service and urlparse(self.path).path.startswith('/api/v1/identity/') and not http_rate_limiter.allow(self._client_key()):
@@ -4484,8 +4863,10 @@ class Handler(BaseHTTPRequestHandler):
             getattr(self, 'headers', {}).get('Authorization', ''), body,
             required=path in {'/api/chat', '/api/confirm', '/api/verify', '/api/cancel',
                              '/api/linkage/cancel', '/api/v1/tasks/status', '/api/v1/audit/unlock', '/api/reset-demo',
-                             '/api/v1/customer-service'} or path.startswith(('/api/dag/', '/api/v1/handoff/', '/api/v1/ocr/','/api/v1/voice/','/api/v1/support/')),
+                             '/api/v1/customer-service'} or path.startswith(('/api/dag/', '/api/v1/handoff/', '/api/v1/ocr/','/api/v1/voice/','/api/v1/support/','/api/v1/business-tasks/','/api/v1/family/','/api/v1/service-tasks/')),
             action=path.rsplit('/', 1)[-1])
+        if path == '/api/v1/voice/synthesize':
+            return self._synthesize_voice(body, family_identity)
         if not family_identity['ok']:
             return self._send(403, family_identity)
         if path.startswith('/api/v1/support/'):
@@ -4503,6 +4884,8 @@ class Handler(BaseHTTPRequestHandler):
         if family_identity.get('managed'):
             body.update(user_id=family_identity['user_id'], device_id=family_identity['device_id'])
         def send_agent(status, response):
+            if response.get('plan_view') and response.get('plan',{}).get('plan_id'):
+                response['plan_view']['source_materials']=runtime.sources.for_task(response['plan']['plan_id'],family_identity.get('user_id',''),family_identity.get('device_id',''))
             if response.get("error_code") == "RECOVERY_UNAVAILABLE":
                 status = 503
             return self._send(status, present_plain_response(response, body.get("elder_mode") is True))
@@ -4564,12 +4947,41 @@ class Handler(BaseHTTPRequestHandler):
                 str(body.get('action_token', '')), str(body.get('credential_id', '')),
                 str(body.get('decision', 'approve')))
             return send_agent(200 if response.get('ok') else 403, response)
+        if path == '/api/v1/family/permissions':
+            if set(body)-{'grant_id','expected_version','permissions','code','user_id','device_id','elder_mode'}:return send_agent(400,{'ok':False,'message':'存在不支持的授权字段。'})
+            response=runtime.family.set_permissions(body.get('grant_id',''),body.get('expected_version'),body.get('permissions'),body.get('code',''))
+            return send_agent(200 if response.get('ok') else 403,response)
+        if path == '/api/v1/family/review':
+            if set(body)-{'task_id','user_id','device_id','elder_mode'}:return send_agent(400,{'ok':False})
+            response=runtime.family.review(body.get('task_id',''))
+            return send_agent(200 if response.get('ok') else 403,response)
         if path == '/api/v1/family/chat':
             if not family_identity.get('family'):
                 return self._send(403, runtime.family.deny('家庭入口需要可信登录会话'))
             response = runtime.family.chat(str(body.get('message', ''))[:2000], body['user_id'], body['device_id'],
                                            str(body.get('subject_id', '')), str(body.get('mode', 'delegate')))
             return send_agent(200 if response.get('ok') else 403, response)
+        if path.startswith('/api/v1/service-tasks/') or path=='/api/v1/business-tasks/handoff':
+            action=path.rsplit('/',1)[-1];allowed={'transaction_id','reason','request_id'} if action=='dispute' else {'target_cents','reserve_cents','deadline','request_id'} if action=='funding' else {'task_id','expected_version'} if action=='recheck' else {'task_id','source_id','expected_version'} if action=='evidence' else {'task_id'}
+            if set(body)-allowed-{'user_id','device_id','elder_mode'}:return send_agent(400,{'ok':False,'message':'存在不支持的服务字段。'})
+            actor,device=family_identity['user_id'],family_identity['device_id']
+            try:
+                if path=='/api/v1/business-tasks/handoff':return send_agent(200,runtime.service_tasks.payment_handoff(body.get('task_id',''),actor,device))
+                if action=='dispute':task=runtime.service_tasks.dispute(body.get('transaction_id'),body.get('reason'),body.get('request_id'),actor,device)
+                elif action=='funding':task=runtime.service_tasks.funding(body.get('target_cents'),body.get('reserve_cents'),body.get('deadline'),body.get('request_id'),actor,device)
+                elif action=='recheck':task=runtime.service_tasks.recheck(body.get('task_id',''),body.get('expected_version'),actor,device)
+                elif action=='evidence':task=runtime.service_tasks.attach_source(body.get('task_id',''),body.get('source_id',''),body.get('expected_version'),actor,device)
+                elif action=='handoff':task=runtime.service_tasks.handoff(body.get('task_id',''),actor,device)
+                else:return send_agent(404,{'ok':False})
+                return send_agent(200,{'ok':True,'service_task':task,'business_executed':False})
+            except PermissionError:return send_agent(403,{'ok':False,'message':'当前账户、设备或银行后端不能办理该服务记录。'})
+            except (ValueError,TypeError):return send_agent(400,{'ok':False,'message':'请核对任务版本、金额、时间和请求编号；不要重复提交银行业务。'})
+        if path in {'/api/v1/business-tasks/resume','/api/v1/business-tasks/recheck'}:
+            if set(body)-{'task_id','expected_version','changes','user_id','device_id','elder_mode'}:
+                return send_agent(400,{'ok':False,'message':'存在不支持的任务字段。'})
+            response=runtime.resume_payment_task(body.get('task_id'),body.get('expected_version'),body.get('changes',{}),
+                family_identity['user_id'],family_identity['device_id'],query_only=path.endswith('/recheck'))
+            return send_agent(response.pop('http_status',200 if response.get('ok') or response.get('plan_view') else 409),response)
         if path == "/api/v1/tasks/status":
             try:
                 response = runtime.task_status(str(body.get("task_id", "")), str(body.get("action_token", "")),
@@ -4623,6 +5035,15 @@ class Handler(BaseHTTPRequestHandler):
                 if voice_evidence and response.get('trace_id'):
                     runtime.audit.write(response['trace_id'],'voice.linked',dict(voice_audit_evidence(voice_evidence),
                         source='human_reviewed_untrusted_voice_draft',device_id=device_id),actor=user_id)
+                task_id=response.get('plan',{}).get('plan_id')
+                if task_id and (evidence or voice_evidence):
+                    if evidence:
+                        fields=response['plan']['entities'];payload={k:evidence[k] for k in ('sha256','source_trace_id','reviewed_fields_sha256','field_evidence') if k in evidence}
+                        payload['draft_changed']=fields.get('beneficiary')!=evidence.get('reviewed_recipient') or fields.get('amount_cents')!=evidence.get('reviewed_amount_cents');kind='ocr'
+                    else:
+                        payload=dict(voice_evidence);payload['draft_changed']=hashlib.sha256(text.strip().encode()).hexdigest()!=payload.get('transcript_sha256') if payload.get('transcript_sha256') else None;kind='voice'
+                    runtime.sources.record(kind,task_id,response['trace_id'],user_id,device_id,payload)
+                    response['plan_view']['source_materials']=runtime.sources.for_task(task_id,user_id,device_id)
                 return send_agent(200,response)
             message = UnifiedMessage(channel=channel, user_id=user_id, conversation_id=conversation_id, text=text, metadata={"device_id": device_id})
             return send_agent(200, gateway.handle(message))

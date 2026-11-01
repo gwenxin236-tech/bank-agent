@@ -188,6 +188,9 @@ class MockCardManagementAdapter:
         if card is None:
             return self._result(ctx, "CARD_NOT_FOUND", "未找到要操作的卡片。", {"card_id": card_id}, False)
         previous = card.get("status")
+        if (sum(item.get('id') == card_id for item in self.cards) != 1 or
+                previous not in {'normal', 'active', '正常', 'reported_loss', '挂失'}):
+            return self._result(ctx, 'CARD_REVIEW_REQUIRED', '卡片标识或状态需核实，本次未修改。', {'card_id':card_id}, False)
         card["status"] = target_status
         data = {"card_id": card_id, "last4": card.get("last4", ""),
                 "previous_status": previous, "status": target_status,

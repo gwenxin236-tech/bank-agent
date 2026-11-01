@@ -9,6 +9,8 @@ class AntifraudAgent(SnapshotAgent):
         factors = self.fact('risk_factors', ())
         signals = [f['code'] for f in factors if isinstance(f.get('code'), str)]
         signals += list(self.fact('signals', ()))
+        semantic=self.fact('semantic_evidence',{})
+        signals += list(semantic.get('active_codes',()))
         if self.fact('aml_suspect', False):
             signals.append('aml_pattern')
         return self.finding(ctx, signals=signals, recommendations=[

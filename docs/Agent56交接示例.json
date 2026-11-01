@@ -1,0 +1,852 @@
+{
+  "schema": 1,
+  "fixture_only": true,
+  "member": "李苏润",
+  "baseline_commit": "0c6608f",
+  "scope": "只读领域接口示例；无银行执行凭据或真实客户数据",
+  "cases": [
+    {
+      "case": "subscription_ready",
+      "expected": "仅提出取消步骤，执行仍需平台确认；退款未知不说到账",
+      "context": {
+        "trace_id": "example-subscription_ready",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "subscription_id": "sub_001",
+          "operation": "cancel"
+        }
+      },
+      "snapshot": {
+        "domain": "subscription",
+        "status": "known",
+        "facts": [
+          {
+            "name": "subscriptions",
+            "value": [
+              {
+                "id": "sub_001",
+                "merchant": "某视频会员",
+                "amount_cents": 2500,
+                "history": [
+                  {
+                    "transaction_id": "tx_1004",
+                    "amount_cents": 2500,
+                    "status": "settled",
+                    "date": "2026-09-14"
+                  }
+                ],
+                "debit_state": "active",
+                "terminable": true,
+                "service_state": "active",
+                "valid_until": "2026-10-14",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              },
+              {
+                "id": "sub_002",
+                "merchant": "云盘服务",
+                "amount_cents": 1800,
+                "history": [],
+                "debit_state": "unknown",
+                "terminable": false,
+                "service_state": "unknown",
+                "valid_until": "2026-09-24",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.subscriptions_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "finding": {
+        "domain": "subscription",
+        "facts": [
+          {
+            "name": "subscriptions",
+            "value": [
+              {
+                "id": "sub_001",
+                "merchant": "某视频会员",
+                "amount_cents": 2500,
+                "history": [
+                  {
+                    "transaction_id": "tx_1004",
+                    "amount_cents": 2500,
+                    "status": "settled",
+                    "date": "2026-09-14"
+                  }
+                ],
+                "debit_state": "active",
+                "terminable": true,
+                "service_state": "active",
+                "valid_until": "2026-10-14",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              },
+              {
+                "id": "sub_002",
+                "merchant": "云盘服务",
+                "amount_cents": 1800,
+                "history": [],
+                "debit_state": "unknown",
+                "terminable": false,
+                "service_state": "unknown",
+                "valid_until": "2026-09-24",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.subscriptions_query"
+          }
+        ],
+        "missing_fields": [],
+        "risk_signals": [
+          "refund_unverified"
+        ],
+        "recommendations": [
+          "历史扣款、未来扣费、服务有效期和退款分别核验；停止扣费不会撤销历史交易。",
+          "节省的未来费用和待核验退款不能计入当前可用余额；资金安排仍需核对账本和预算。",
+          "退款是否到账尚未核实，不能把退款金额为零理解为无需退款或已经到账。",
+          "可以提出停止后续自动扣费的申请，需确认后由平台办理；当前尚未取消。",
+          "记录中的服务状态为有效；停止扣费不等于服务立即结束，有效期以服务商核验为准。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [
+          {
+            "tool": "cancel_subscription",
+            "params": {
+              "subscription_id": "sub_001"
+            }
+          }
+        ],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [],
+        "user_options": [],
+        "production_replacement": "生产接入账单、代扣和服务商 Adapter；查询和取消均经现有黄色确认，不直接取消或退款。"
+      },
+      "supervisor_status": "ready"
+    },
+    {
+      "case": "subscription_choose_target",
+      "expected": "无取消步骤，提供本次快照的真实候选；快照须在查询确认后获得",
+      "context": {
+        "trace_id": "example-subscription_choose_target",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "operation": "cancel"
+        }
+      },
+      "snapshot": {
+        "domain": "subscription",
+        "status": "known",
+        "facts": [
+          {
+            "name": "subscriptions",
+            "value": [
+              {
+                "id": "sub_001",
+                "merchant": "某视频会员",
+                "amount_cents": 2500,
+                "history": [
+                  {
+                    "transaction_id": "tx_1004",
+                    "amount_cents": 2500,
+                    "status": "settled",
+                    "date": "2026-09-14"
+                  }
+                ],
+                "debit_state": "active",
+                "terminable": true,
+                "service_state": "active",
+                "valid_until": "2026-10-14",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              },
+              {
+                "id": "sub_002",
+                "merchant": "云盘服务",
+                "amount_cents": 1800,
+                "history": [],
+                "debit_state": "unknown",
+                "terminable": false,
+                "service_state": "unknown",
+                "valid_until": "2026-09-24",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.subscriptions_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "finding": {
+        "domain": "subscription",
+        "facts": [
+          {
+            "name": "subscriptions",
+            "value": [
+              {
+                "id": "sub_001",
+                "merchant": "某视频会员",
+                "amount_cents": 2500,
+                "history": [
+                  {
+                    "transaction_id": "tx_1004",
+                    "amount_cents": 2500,
+                    "status": "settled",
+                    "date": "2026-09-14"
+                  }
+                ],
+                "debit_state": "active",
+                "terminable": true,
+                "service_state": "active",
+                "valid_until": "2026-10-14",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              },
+              {
+                "id": "sub_002",
+                "merchant": "云盘服务",
+                "amount_cents": 1800,
+                "history": [],
+                "debit_state": "unknown",
+                "terminable": false,
+                "service_state": "unknown",
+                "valid_until": "2026-09-24",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.subscriptions_query"
+          }
+        ],
+        "missing_fields": [
+          "subscription_id"
+        ],
+        "risk_signals": [
+          "refund_unverified"
+        ],
+        "recommendations": [
+          "历史扣款、未来扣费、服务有效期和退款分别核验；停止扣费不会撤销历史交易。",
+          "节省的未来费用和待核验退款不能计入当前可用余额；资金安排仍需核对账本和预算。",
+          "请从本次查询的订阅中选择具体项目，避免取消错服务。",
+          "退款是否到账尚未核实，不能把退款金额为零理解为无需退款或已经到账。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [],
+        "user_options": [
+          {
+            "action": "select_subscription",
+            "subscription_id": "sub_001",
+            "label": "某视频会员"
+          },
+          {
+            "action": "select_subscription",
+            "subscription_id": "sub_002",
+            "label": "云盘服务"
+          }
+        ],
+        "production_replacement": "生产接入账单、代扣和服务商 Adapter；查询和取消均经现有黄色确认，不直接取消或退款。"
+      },
+      "supervisor_status": "ready"
+    },
+    {
+      "case": "subscription_unavailable",
+      "expected": "未知扣费或不可取消时不生成写建议",
+      "context": {
+        "trace_id": "example-subscription_unavailable",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "subscription_id": "sub_002",
+          "operation": "cancel"
+        }
+      },
+      "snapshot": {
+        "domain": "subscription",
+        "status": "known",
+        "facts": [
+          {
+            "name": "subscriptions",
+            "value": [
+              {
+                "id": "sub_001",
+                "merchant": "某视频会员",
+                "amount_cents": 2500,
+                "history": [
+                  {
+                    "transaction_id": "tx_1004",
+                    "amount_cents": 2500,
+                    "status": "settled",
+                    "date": "2026-09-14"
+                  }
+                ],
+                "debit_state": "active",
+                "terminable": true,
+                "service_state": "active",
+                "valid_until": "2026-10-14",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              },
+              {
+                "id": "sub_002",
+                "merchant": "云盘服务",
+                "amount_cents": 1800,
+                "history": [],
+                "debit_state": "unknown",
+                "terminable": false,
+                "service_state": "unknown",
+                "valid_until": "2026-09-24",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.subscriptions_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "finding": {
+        "domain": "subscription",
+        "facts": [
+          {
+            "name": "subscriptions",
+            "value": [
+              {
+                "id": "sub_001",
+                "merchant": "某视频会员",
+                "amount_cents": 2500,
+                "history": [
+                  {
+                    "transaction_id": "tx_1004",
+                    "amount_cents": 2500,
+                    "status": "settled",
+                    "date": "2026-09-14"
+                  }
+                ],
+                "debit_state": "active",
+                "terminable": true,
+                "service_state": "active",
+                "valid_until": "2026-10-14",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              },
+              {
+                "id": "sub_002",
+                "merchant": "云盘服务",
+                "amount_cents": 1800,
+                "history": [],
+                "debit_state": "unknown",
+                "terminable": false,
+                "service_state": "unknown",
+                "valid_until": "2026-09-24",
+                "refund_state": "unknown",
+                "refund_amount_cents": 0
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.subscriptions_query"
+          }
+        ],
+        "missing_fields": [
+          "debit_state"
+        ],
+        "risk_signals": [
+          "refund_unverified",
+          "debit_state_unknown"
+        ],
+        "recommendations": [
+          "历史扣款、未来扣费、服务有效期和退款分别核验；停止扣费不会撤销历史交易。",
+          "节省的未来费用和待核验退款不能计入当前可用余额；资金安排仍需核对账本和预算。",
+          "退款是否到账尚未核实，不能把退款金额为零理解为无需退款或已经到账。",
+          "未来扣费是否仍开启尚未核实，先核对扣费授权。",
+          "服务有效状态需向服务商核实，不能根据扣费状态推断。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [],
+        "user_options": [
+          {
+            "action": "recheck_facts"
+          },
+          {
+            "action": "human_handoff"
+          }
+        ],
+        "production_replacement": "生产接入账单、代扣和服务商 Adapter；查询和取消均经现有黄色确认，不直接取消或退款。"
+      },
+      "supervisor_status": "ready"
+    },
+    {
+      "case": "subscription_failed_read",
+      "expected": "未核实，不解释为没有订阅",
+      "context": {
+        "trace_id": "example-subscription_failed_read",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {}
+      },
+      "snapshot": {
+        "domain": "subscription",
+        "status": "unknown",
+        "facts": [],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "finding": {
+        "domain": "subscription",
+        "facts": [],
+        "missing_fields": [
+          "subscription_id",
+          "verified_subscription_facts"
+        ],
+        "risk_signals": [],
+        "recommendations": [
+          "历史扣款、未来扣费、服务有效期和退款分别核验；停止扣费不会撤销历史交易。",
+          "节省的未来费用和待核验退款不能计入当前可用余额；资金安排仍需核对账本和预算。",
+          "本次未能核实订阅资料，请重新核对或联系人工；不能据此认定没有订阅。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.subscriptions_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [],
+        "user_options": [
+          {
+            "action": "recheck_facts"
+          },
+          {
+            "action": "human_handoff"
+          }
+        ],
+        "production_replacement": "生产接入账单、代扣和服务商 Adapter；查询和取消均经现有黄色确认，不直接取消或退款。"
+      },
+      "supervisor_status": "needs_review"
+    },
+    {
+      "case": "card_loss_ready",
+      "expected": "查询、挂失、核验三个候选步骤；平台确认和strong_auth不可省略",
+      "context": {
+        "trace_id": "example-card_loss_ready",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "card_id": "card_001",
+          "card_operation": "report_loss"
+        }
+      },
+      "snapshot": {
+        "domain": "card",
+        "status": "known",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "正常",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "finding": {
+        "domain": "card",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "正常",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "missing_fields": [],
+        "risk_signals": [],
+        "recommendations": [
+          "挂失和解挂需明确确认、本人强认证，并查询最终卡状态；当前分析不是办理成功回执。",
+          "本页隐藏卡片只改变显示，不等于挂失或注销；挂失也不等于取消订阅扣费授权。",
+          "后续付款仍需重新进行支付预检，核对卡状态、余额、限额和预算；解挂不保证付款一定成功。",
+          "可以提出挂失申请；挂失可能影响使用该卡付款，具体结果以银行核验为准。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [
+          {
+            "tool": "list_cards",
+            "params": {
+              "card_id": "card_001"
+            }
+          },
+          {
+            "tool": "report_card_loss",
+            "params": {
+              "card_id": "card_001"
+            }
+          },
+          {
+            "tool": "verify_card_status",
+            "params": {
+              "card_id": "card_001"
+            }
+          }
+        ],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [
+          "strong_auth"
+        ],
+        "user_options": [],
+        "production_replacement": "通过原 CardManagementAdapter 执行和核验；不改密码、不替代本人 MFA、不伪造卡状态。"
+      },
+      "supervisor_status": "ready"
+    },
+    {
+      "case": "card_unloss_ready",
+      "expected": "提出解挂核验步骤；主链确认前另展示找回及本人保管提醒",
+      "context": {
+        "trace_id": "example-card_unloss_ready",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "card_id": "card_001",
+          "card_operation": "unreport_loss"
+        }
+      },
+      "snapshot": {
+        "domain": "card",
+        "status": "known",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "挂失",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "finding": {
+        "domain": "card",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "挂失",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "missing_fields": [],
+        "risk_signals": [],
+        "recommendations": [
+          "挂失和解挂需明确确认、本人强认证，并查询最终卡状态；当前分析不是办理成功回执。",
+          "本页隐藏卡片只改变显示，不等于挂失或注销；挂失也不等于取消订阅扣费授权。",
+          "后续付款仍需重新进行支付预检，核对卡状态、余额、限额和预算；解挂不保证付款一定成功。",
+          "可以提出解挂申请；需确认卡片已找回且由本人保管，再由平台核验办理条件。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [
+          {
+            "tool": "list_cards",
+            "params": {
+              "card_id": "card_001"
+            }
+          },
+          {
+            "tool": "unreport_card_loss",
+            "params": {
+              "card_id": "card_001"
+            }
+          },
+          {
+            "tool": "verify_card_status",
+            "params": {
+              "card_id": "card_001"
+            }
+          }
+        ],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [
+          "strong_auth"
+        ],
+        "user_options": [],
+        "production_replacement": "通过原 CardManagementAdapter 执行和核验；不改密码、不替代本人 MFA、不伪造卡状态。"
+      },
+      "supervisor_status": "ready"
+    },
+    {
+      "case": "card_already_lost",
+      "expected": "不生成重复挂失步骤，主链只读复核已达到目标状态",
+      "context": {
+        "trace_id": "example-card_already_lost",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "card_id": "card_001",
+          "card_operation": "report_loss"
+        }
+      },
+      "snapshot": {
+        "domain": "card",
+        "status": "known",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "挂失",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "finding": {
+        "domain": "card",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "挂失",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "missing_fields": [],
+        "risk_signals": [
+          "card_already_lost"
+        ],
+        "recommendations": [
+          "挂失和解挂需明确确认、本人强认证，并查询最终卡状态；当前分析不是办理成功回执。",
+          "本页隐藏卡片只改变显示，不等于挂失或注销；挂失也不等于取消订阅扣费授权。",
+          "后续付款仍需重新进行支付预检，核对卡状态、余额、限额和预算；解挂不保证付款一定成功。",
+          "本次记录显示该卡已挂失，无需重复挂失；如记录不符，请复核或联系人工。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [
+          "strong_auth"
+        ],
+        "user_options": [
+          {
+            "action": "recheck_facts"
+          },
+          {
+            "action": "human_handoff"
+          }
+        ],
+        "production_replacement": "通过原 CardManagementAdapter 执行和核验；不改密码、不替代本人 MFA、不伪造卡状态。"
+      },
+      "supervisor_status": "ready"
+    },
+    {
+      "case": "card_unknown",
+      "expected": "未知卡状态不生成写步骤",
+      "context": {
+        "trace_id": "example-card_unknown",
+        "session_id": "example-session",
+        "actor_id": "demo-user",
+        "subject_id": "demo-user",
+        "device_id": "example-device",
+        "channel": "offline_fixture",
+        "user_input": "虚构交接示例",
+        "entities": {
+          "card_id": "card_001",
+          "card_operation": "report_loss"
+        }
+      },
+      "snapshot": {
+        "domain": "card",
+        "status": "known",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "unknown",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "finding": {
+        "domain": "card",
+        "facts": [
+          {
+            "name": "cards",
+            "value": [
+              {
+                "id": "card_001",
+                "name": "银联白金卡",
+                "status": "unknown",
+                "last4": "6222"
+              }
+            ],
+            "source": "banking_agent.py:MockBankCore.cards_query"
+          }
+        ],
+        "missing_fields": [
+          "card_status"
+        ],
+        "risk_signals": [
+          "card_status_unknown"
+        ],
+        "recommendations": [
+          "挂失和解挂需明确确认、本人强认证，并查询最终卡状态；当前分析不是办理成功回执。",
+          "本页隐藏卡片只改变显示，不等于挂失或注销；挂失也不等于取消订阅扣费授权。",
+          "后续付款仍需重新进行支付预检，核对卡状态、余额、限额和预算；解挂不保证付款一定成功。",
+          "所选卡片状态尚不明确，请先核实，不推断为正常或已挂失。"
+        ],
+        "evidence": [
+          "banking_agent.py:MockBankCore.cards_query"
+        ]
+      },
+      "proposal": {
+        "suggested_steps": [],
+        "required_confirmations": [
+          "explicit_user_confirmation"
+        ],
+        "required_auth": [
+          "strong_auth"
+        ],
+        "user_options": [
+          {
+            "action": "recheck_facts"
+          },
+          {
+            "action": "human_handoff"
+          }
+        ],
+        "production_replacement": "通过原 CardManagementAdapter 执行和核验；不改密码、不替代本人 MFA、不伪造卡状态。"
+      },
+      "supervisor_status": "ready"
+    }
+  ],
+  "record_scope": "Historical member handoff at81ea8acd; old counts/hashes are not current integration acceptance",
+  "current_verification": "docs/PR1集成与验收.md; current965tests verified separately"
+}

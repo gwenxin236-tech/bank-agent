@@ -57,7 +57,7 @@ def assess_transfer_risk(bank, entities, actor_id):
     suspect = candidate_near and aml_count >= POLICY["aml_transfer_count"]
     result.update(recent_transfer_count=recent, aml_count=aml_count, aml_suspect=suspect,
                   aml_lower_cents=AML_LOWER_CENTS, aml_threshold_cents=AMOUNT_THRESHOLD_CENTS,
-                  history_statuses=['succeeded', 'processing'], assessed_at=now.isoformat())
+                  history_statuses=['succeeded', 'processing'], assessed_at=now.isoformat(), semantic_evidence=entities.get('_semantic_risk',{}))
     if suspect:
         result['decision_reason'] += f'；疑似结构化拆分：同一用户当日第{aml_count}笔{AML_LOWER_CENTS}分至不足{AMOUNT_THRESHOLD_CENTS}分转账'
     return result

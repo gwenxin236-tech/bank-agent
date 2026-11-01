@@ -23,6 +23,11 @@ class HandoffCardTests(unittest.TestCase):
         self.rt.audit.db.close()
         self.tmp.cleanup()
 
+    def test_payment_preflight_snapshot_includes_blocker_facts_without_account_details(self):
+        card=HandoffCard.from_plan({'plan_id':'p','trace_id':'t','intent':'transfer','actor_id':'demo-user','device_id':'demo-device','entities':{'amount_cents':8000000},'steps':[],
+            'preflight':{'generated_at':'2026-10-31T12:00:00+00:00','checks':{'daily_limit':{'status':'missing','evidence':{'amount_cents':8000000,'current_cents':5000000,'limit_cents':10000000,'account_number':'6222021234561234'}}}}},'payment_blocked').to_dict()
+        snapshot=card['verified_information']['payment_preflight'];self.assertEqual(snapshot['facts'][0]['evidence']['limit_cents'],10000000);self.assertEqual(snapshot['facts'][0]['status'],'missing');self.assertNotIn('account_number',snapshot['facts'][0]['evidence']);self.assertTrue(snapshot['observed_at'])
+
     def test_contract_has_required_fields_and_least_privilege_redaction(self):
         card = HandoffCard.from_plan({
             'plan_id': 'plan-1', 'trace_id': 'trace-1', 'intent': 'transfer',

@@ -36,12 +36,45 @@ class FamilyAccess:
     def chat(self, text, guardian_id, device_id, subject_id, mode='delegate'):
         guardian = self.store.accounts.get(guardian_id)
         owner = self.store.accounts.get(subject_id)
-        if not guardian or not owner or guardian['device_id'] != device_id:
+        if not guardian or not owner or self.store.device_for(guardian_id) != device_id or not self.store.device_for(subject_id):
             return self.deny('家庭身份或绑定设备无效', actor=guardian_id, subject=subject_id)
         grant = self.store.between(guardian_id, subject_id)
+        service=getattr(self.rt,'identity_service',None)
+        if service:mode='assist'
         context = dict(guardian_id=guardian_id, guardian_device_id=device_id, subject_id=subject_id,
-                       grant_id=grant.grant_id if grant else '', mode=mode)
-        return self.rt.chat(text, actor_id=subject_id, device_id=owner['device_id'], family_context=context)
+                       grant_id=grant.grant_id if grant else '', mode=mode,consent_version=self.store.consent(grant.grant_id)['version'] if grant else 0)
+        response=self.rt.chat(text, actor_id=subject_id, device_id=self.store.device_for(subject_id), family_context=context)
+        if service and response.get('plan_view') and response.get('plan',{}).get('requires_confirmation'):
+            response['plan_view'].update(requires_confirmation=False,action_token='',confirmation_hint='请转交账户本人核对')
+            response['message']='已生成家庭协助草稿，请将任务编号交由账户本人核对；尚未转账。'
+        return response
+
+    def set_permissions(self,grant_id,version,permissions,code):
+        service=getattr(self.rt,'identity_service',None)
+        grant=self.store.get(grant_id);identity=service.current_identity() if service else None
+        if not identity or not grant or identity['user_id']!=grant.subject_id or identity['role']!='user':return self.deny('仅账户本人可核准家庭权限')
+        if not isinstance(permissions,dict) or set(permissions)!={'read','notify','assist'} or any(type(v) is not bool for v in permissions.values()) or permissions['assist'] and not permissions['read']:return {'ok':False,'message':'协助起草需要明确阅读授权；三项权限分别勾选。'}
+        if type(version) is not int or version!=self.store.consent(grant_id)['version']:return {'ok':False,'message':'权限版本已变化，请刷新后重新核对。'}
+        if not service.approve_family_scope(grant_id,permissions,version,code):return self.deny('本人当前未使用的动态码未通过')
+        try:consent=self.store.set_consent(grant_id,identity['user_id'],version,permissions)
+        except (ValueError,PermissionError):return {'ok':False,'message':'权限未修改，请核对关系有效期和版本。'}
+        self.rt.audit.write('family_scope_'+uuid.uuid4().hex,'family.scope.updated',{'grant_id':grant_id,'version':consent['version'],'permissions':permissions},actor=identity['user_id'],intent='family_authorization')
+        return {'ok':True,'consent':consent,'message':'仅本机虚构家庭账户授权已保存；协助不会代替本人认证或提交。'}
+
+    def permission_records(self,actor):
+        with self.store.lock:rows=self.store.db.execute('SELECT grant_id,guardian_id,subject_id FROM guardianships WHERE guardian_id=? OR subject_id=?',(actor,actor)).fetchall()
+        return [dict(row,consent=self.store.consent(row['grant_id']),is_owner=row['subject_id']==actor) for row in rows]
+
+    def review(self,task_id):
+        service=getattr(self.rt,'identity_service',None);identity=service.current_identity() if service else None
+        with self.rt.recovery_task_lock(task_id):
+            plan=self.rt.pending.get(task_id)
+            if not identity or not plan or not plan.entities.get('_family') or plan.actor_id!=identity['user_id'] or plan.device_id!=identity['device_id']:return self.deny('仅绑定设备上的账户本人可核对该协助草稿')
+            denied=self.check_identity(plan,identity['user_id'],identity['device_id'],'verify')
+            if denied:return denied
+            decision=self.rt.policy.classify(plan.intent,plan.entities,plan.actor_id)
+            if decision.get('authz_allowed') is False:return self.deny(decision['decision_reason'],plan)
+            return self.rt._response(plan,'这是亲友协助起草的计划；请本人核对，并完成新的强认证和最终确认。')
 
     def check_identity(self, plan, actor, device, action):
         service=getattr(self.rt,'identity_service',None)
@@ -121,7 +154,9 @@ class FamilyAccess:
     def guardian_inbox(self, guardian):
         items = []
         for grant in self.store.grants_for(guardian):
-            if grant['active']:
+            if grant['active'] and (not self.store.require_explicit_consent or self.store.consent(grant['grant_id'])['notify']):
                 items.extend(n for n in self.rt.notifications.list_notifications(grant['subject_id'], channel='guardian')
                              if n['target'] == guardian and n['status'] == 'LOCAL_QUEUED')
+        if self.store.require_explicit_consent:
+            items=[{k:v for k,v in item.items() if k in {'notification_id','event_type','status','created_at'}}|{'message':'账户风险提醒，请联系本人核对；未共享交易明细。'} for item in items]
         return items

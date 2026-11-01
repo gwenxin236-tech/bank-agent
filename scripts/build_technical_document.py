@@ -27,6 +27,7 @@ from reportlab.platypus import (BaseDocTemplate, CondPageBreak, Flowable, Frame,
                                Table, TableStyle, Image)
 from reportlab.platypus.tableofcontents import TableOfContents
 from technical_figures import TechnicalFigure
+from source_release import material_evidence
 
 ROOT = Path(__file__).resolve().parents[1]
 INK = colors.black
@@ -60,7 +61,7 @@ SOURCES = {
  'S22': ('app/llm_adapter.py', 'class LLMConfig:', '可选模型受限输出与文本外发边界'),
  'S23': ('app/static/app.js', 'function renderCardDisplay()', '显示设置、隐藏/恢复、新轮求助与前端交互'),
  'S24': ('docs/E7B适老化验收.md', '## 5.', '真实读屏仍需人工走查；语音实现app/speech_adapter.py'),
- 'S25': ('docs/验收摘要.json', '"tests_run":', '当前完整回归与相对路径源码哈希'),
+ 'S25': ('docs/assets/N16发行验收.json', '"current_full_windows":', '当前源码完整回归；镜像未验与旧发布记录分开'),
  'S26': ('docs/E6边界测试矩阵.md', '## T01-T25', '正常/异常测试映射；tests/含各专项实现'),
  'S27': ('docs/需求追踪矩阵.md', '## L2', '官方交付要求、分层与未验收项'),
  'S28': ('README.md', '#', '运行方式、功能演示与工程边界'),
@@ -103,6 +104,11 @@ SOURCES = {
  'S65': ('docs/assets/RAG修订验收.json', '"status": "PASS_LOCAL_RAG_AND_FULL_REGRESSION"', '保留旧题标签与阈值的三模式修订实测'),
  'S66': ('docs/assets/DAG真实模型验收.json', '"status": "PASS_REAL_MODEL_DAG_BOUNDED"', '两次真实模型DAG，首次拒绝及第二次原图确认'),
  'S67': ('docs/最终推进清单.md', '# 最终推进清单', '最终执行顺序、团队交接及人工/外部待办'),
+ 'S68': ('app/service_tasks.py', 'class ServiceTasks:', '交易异议、资金准备与本地交接，不是银行案件或退款'),
+ 'S69': ('app/source_provenance.py', 'class SourceProvenance:', '资料来源、版本与ACL重验，仅参考不授权'),
+ 'S70': ('app/payment_tasks.py', 'def resume_payment(', '原任务重准备、版本检查和新确认'),
+ 'S71': ('app/action_effects.py', 'def build_transfer_contract(', '单笔效果范围和原确认绑定'),
+ 'S72': ('docs/原型评测与真人验收.md', '## 2026-10-31', '当前原型/平台负载与真实样本待验'),
 }
 
 
@@ -192,7 +198,7 @@ class Cover(Flowable):
         c, w, h = self.canv, self.width, self.height
         c.setFillColor(INK); c.setFont('Heading',10)
         c.drawString(0,h-5,'人工智能赛道')
-        c.drawRightString(w,h-5,'竞赛离线原型 / P11材料同步 · 2026-10-31')
+        c.drawRightString(w,h-5,'竞赛离线原型 / N16交付修订 · 2026-11-01')
         c.setFillColor(INK); c.setFont('Heading',55)
         c.drawString(32,h*.59,'技术文档')
         c.setFillColor(INK); c.setFont('Heading',23)
@@ -200,6 +206,8 @@ class Cover(Flowable):
         c.setFont('Heading',12); c.drawString(32,h*.48,'自然语言理解、多领域核对与受控银行任务执行')
         c.setFont('Heading',10.5); c.setFillColor(INK)
         c.drawString(32,h*.40,'当前工作区实现快照 / 架构、算法、安全与验证')
+        c.drawString(32,h*.34,'项目负责人：宫文馨')
+        c.drawString(32,h*.30,'团队成员：董有轩、李浩林、郭嘉乐、李苏润')
         for offset in [0,23,46]:
             c.setLineWidth(.7); c.setStrokeColor(colors.HexColor('#84adb2'))
             path=c.beginPath(); path.moveTo(-55,120-offset)
@@ -238,6 +246,7 @@ def markup(text, emphasis=True):
 
 
 def build(source, output, records, font_dir):
+    material_evidence(ROOT)
     fonts(font_dir)
     text=source.read_text(encoding='utf-8')
     rows=source_records()
@@ -428,8 +437,9 @@ def build(source, output, records, font_dir):
             story.append(KeepTogether([TechnicalFigure(kind,content_width,ROOT),Spacer(1,8),paragraph(caption,'caption')]))
         elif line.startswith(':::image '):
             name=line.split(' ',1)[1];caption=lines[index].strip();index+=1
-            image_path=(ROOT/'data/verification/t20-20261022/scenes'/name).resolve()
-            allowed=(ROOT/'data/verification/t20-20261022/scenes').resolve()
+            allowed=(ROOT/'data/verification').resolve()
+            image_path=(ROOT/name).resolve() if name.startswith('data/verification/') else (allowed/'t20-20261022/scenes'/name).resolve()
+            if '_internal' in image_path.parts: raise ValueError('Private screenshot path rejected')
             if not image_path.is_relative_to(allowed) or not image_path.is_file():raise ValueError('Missing or unsafe document screenshot')
             image=Image(str(image_path));scale=min(content_width/image.imageWidth,390/image.imageHeight)
             image.drawWidth=image.imageWidth*scale;image.drawHeight=image.imageHeight*scale

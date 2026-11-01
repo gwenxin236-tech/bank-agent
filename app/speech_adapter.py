@@ -86,7 +86,7 @@ class VoiceEvidenceStore:
             if len(self._items)>=64:raise ValueError('voice evidence budget exhausted')
             token='voice_'+secrets.token_hex(16)
             self._items[token]={'owner':owner,'device':device,'expires':self.clock()+300,'source_trace_id':trace,
-                **{k:evidence[k] for k in hashes}}
+                **{k:evidence[k] for k in hashes},**({'transcript_sha256':evidence['transcript_sha256']} if 'transcript_sha256' in evidence else {})}
             return token
     def consume(self,token,owner,device,*,reviewed=False):
         with self._lock:
@@ -95,7 +95,7 @@ class VoiceEvidenceStore:
             if (reviewed is not True or not row or row['owner']!=owner or row['device']!=device):
                 raise PermissionError('invalid voice evidence')
             self._items.pop(token)
-        return {k:row[k] for k in ('source_trace_id','upload_sha256','pcm_sha256','normalized_wav_sha256')}
+        return {k:row[k] for k in ('source_trace_id','upload_sha256','pcm_sha256','normalized_wav_sha256','transcript_sha256') if k in row}
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):

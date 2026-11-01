@@ -4,7 +4,8 @@ Production replacement: transactional workflow store/CAS, authenticated status A
 core query adapter and supervised distributed scheduler. In-flight effects are queried,
 never retried. Previously authorized, not-yet-started birthday nodes may run when due.
 """
-from dataclasses import asdict
+from dataclasses import asdict, fields
+from business_tasks import BusinessTaskStore
 from datetime import datetime, timezone
 from functools import wraps
 import hashlib
@@ -20,6 +21,7 @@ class RecoveryStore:
     def __init__(self, audit, path):
         self.audit = audit
         self.path = Path(path)
+        self.business_tasks = BusinessTaskStore(audit)
         with audit.lock, audit.db:
             audit.db.execute('''CREATE TABLE IF NOT EXISTS task_checkpoints (
                 task_id TEXT PRIMARY KEY, status TEXT NOT NULL,
@@ -33,6 +35,7 @@ class RecoveryStore:
                 ON CONFLICT(task_id) DO UPDATE SET status=excluded.status,
                 payload_json=excluded.payload_json, updated_at=excluded.updated_at''',
                 (task_id, status, raw, datetime.now(timezone.utc).isoformat()))
+            self.business_tasks.checkpoint_locked(task_id, status, payload)
 
     def rows(self):
         with self.audit.lock:
@@ -117,12 +120,41 @@ def durable_action(method):
             if self.recovery_failed:
                 return self.recovery_unavailable()
             plan = self.pending.get(task_id)
+            if plan is not None:
+                saved = self.recovery_store.get(task_id)
+                trusted = saved[1].get('plan', {}) if saved else {}
+                if trusted and (plan.plan_id,plan.actor_id,plan.device_id) != (trusted.get('plan_id'),trusted.get('actor_id'),trusted.get('device_id')):
+                    credential = self.auth_credentials.latest_for(task_id)
+                    if credential is not None:credential.invalidated_reason = 'binding_changed'
+                    restored = dict(trusted)
+                    restored['steps'] = [self._recovery_step_type(**x) for x in restored['steps']]
+                    self.save_task_checkpoint(self._recovery_plan_type(**restored),saved[0])
+                    self.audit.write(trusted['trace_id'],'task.binding.rejected',{'task_id':task_id,'reason':'checkpoint_identity_mismatch'},actor=trusted['actor_id'])
+                    return {'ok':False,'error_code':'AUTH_BINDING_MISMATCH','message':'任务主体或设备已变化，请重新核对。'}
             try:
                 response = method(self, *args, **kwargs)
                 if method.__name__ == 'chat':
                     task_id = response.get('plan', {}).get('plan_id', '')
                     plan = self.pending.get(task_id)
+                    raw = response.get('plan', {})
+                    if plan is None and raw.get('intent') in {'transfer','fraud_guard'}:
+                        plan = self._recovery_plan_type(**{f.name:raw[f.name] for f in fields(self._recovery_plan_type) if f.name in raw})
+                        state = {'SUCCESS':'succeeded','FAILED':'failed','DEFERRED':'deferred','PROCESSING':'processing','UNKNOWN':'unknown'}.get(response.get('result',{}).get('status'))
+                        state = state or ('needs_clarification' if response.get('awaiting_details') else 'blocked')
+                        self.save_task_checkpoint(plan,state)
+                        plan = None  # A blocked plan must never become pending/executable.
                 if plan is not None:
+                    if response.get('ok') is False and not response.get('result'):
+                        saved = self.recovery_store.get(task_id)
+                        trusted = saved[1].get('plan', {}) if saved else {}
+                        if trusted and ((plan.plan_id,plan.actor_id,plan.device_id) !=
+                                (trusted.get('plan_id'),trusted.get('actor_id'),trusted.get('device_id'))
+                                or self._auth_digest(plan) != trusted.get('entity_digest')):
+                            # Preserve revocations, but never persist attacker-mutated parameters.
+                            restored = dict(trusted)
+                            restored['steps'] = [self._recovery_step_type(**x) for x in restored['steps']]
+                            self.save_task_checkpoint(self._recovery_plan_type(**restored),saved[0])
+                            return response
                     if task_id in self.pending:
                         self.save_task_checkpoint(plan, 'waiting_confirmation')
                         response['task_status'] = 'waiting_confirmation'
@@ -133,6 +165,8 @@ def durable_action(method):
                         if method.__name__ == 'cancel' and response.get('ok'):
                             state = 'cancelled'
                         self.save_task_checkpoint(plan, state)
+                task = self.business_tasks.response(response,method.__name__)
+                if task is not None:response['business_task'] = task
                 return response
             except sqlite3.Error:
                 self.recovery_failed = True
@@ -145,9 +179,14 @@ class RecoveryMixin:
         self.recovery_lock = threading.RLock()
         self.recovery_failed = False
         self._recovery_task_locks = {}
+        self._recovery_plan_type = plan_type
+        self._recovery_step_type = step_type
         self.recovery_store = RecoveryStore(self.audit, path)
+        self.business_tasks = self.recovery_store.business_tasks
         self.recovery_scheduler = RecoveryScheduler(self.reconcile_recovery_tasks)
         for task_id, state, payload in self.recovery_store.rows():
+            with self.audit.lock, self.audit.db:
+                self.business_tasks.checkpoint_locked(task_id,state,payload)
             data = dict(payload['plan'])
             data['steps'] = [step_type(**step) for step in data['steps']]
             plan = plan_type(**data)

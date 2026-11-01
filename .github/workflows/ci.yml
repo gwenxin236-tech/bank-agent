@@ -10,11 +10,16 @@ permissions:
 
 jobs:
   core:
-    name: core-${{ matrix.os }}
+    name: core-${{ matrix.os }}-${{ matrix.label }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022]
+        include:
+          - {os: ubuntu-24.04, index: 0, count: 1, label: full}
+          - {os: windows-2022, index: 0, count: 4, label: shard1}
+          - {os: windows-2022, index: 1, count: 4, label: shard2}
+          - {os: windows-2022, index: 2, count: 4, label: shard3}
+          - {os: windows-2022, index: 3, count: 4, label: shard4}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:
@@ -35,13 +40,15 @@ jobs:
           git diff --check
           python -m compileall -q app scripts tests
       - name: Core and real subprocess recovery, zero skips
-        run: python scripts/ci_verify.py --scope core --output data/verification/ci/core.json
+        env:
+          BANK_CI_TEST_TIMEOUT_SECONDS: '120'
+        run: python scripts/ci_verify.py --scope core --shard-index ${{ matrix.index }} --shard-count ${{ matrix.count }} --output data/verification/ci/core.json
       - name: Existing demo readiness preflight
         run: python scripts/preflight.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:
-          name: core-${{ matrix.os }}
+          name: core-${{ matrix.os }}-${{ matrix.label }}
           path: data/verification/ci/
           if-no-files-found: error
           retention-days: 14
@@ -73,7 +80,10 @@ jobs:
           echo "C7_NODE_BINARY=$(command -v node)" >> "$GITHUB_ENV"
           echo "C7_PLAYWRIGHT_MODULE=$RUNNER_TEMP/bank-browser-qa/node_modules/playwright/index.js" >> "$GITHUB_ENV"
       - name: JavaScript syntax
-        run: node --check app/static/app.js
+        run: |
+          node --check app/static/app.js
+          node --check app/static/speech-output.js
+          node tests/test_speech_output.js
       - name: Browser tests, zero skips
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.qa-tools/browsers

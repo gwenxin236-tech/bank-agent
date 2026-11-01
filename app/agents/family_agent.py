@@ -9,7 +9,7 @@ class FamilyAgent(SnapshotAgent):
         grant = self.fact('grant')
         missing = ['grant_id'] if ctx.actor_id != ctx.subject_id and grant is None else []
         signals = ['grant_inactive'] if grant and not grant.get('active_at_capture') else []
-        return self.finding(ctx, missing, signals, ['只报告关系、授权类型、额度和有效期事实；亲属称呼不是操作权限。'])
+        return self.finding(ctx, missing, signals, ['只报告关系、授权类型、额度和有效期事实；亲属称呼不是操作权限。自建身份须本人分别核准阅读/通知/协助，并由本人认证和最终提交，事实报告不能代替实时授权检查。'])
 
     def propose(self, ctx, finding):
         self.validate_finding(ctx, finding)

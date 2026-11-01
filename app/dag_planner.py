@@ -6,7 +6,7 @@ import hashlib,json,re
 from task_dag import DagNode,TaskDag,_instant
 
 MAX_NODES=32;MAX_EDGES=128;MAX_DEPTH=16;MAX_WAIT_SECONDS=3600
-EXTRA_READS={'get_balance':'核对本人可用余额','list_transactions':'核对本人交易记录','analyze_bills':'核对本人账单'}
+EXTRA_READS={'get_balance':'核对本人可用余额','list_transactions':'核对本人交易记录','analyze_bills':'核对本人账单','financial_health_report':'财务域：核对资金准备','check_funding_ready':'核对财务结果是否满足本次支付'}
 
 
 class DagProposalError(ValueError):pass
@@ -45,6 +45,18 @@ def generate(plan,registry,allowed_reads,*,mode='offline',client=None):
         result,reason=client.complete_json(prompt,json.dumps(catalogue(plan,registry,allowed_reads),sort_keys=True))
         if reason!='accepted' or not isinstance(result,dict):raise DagProposalError('model proposal unavailable: '+str(reason))
         return result,'model_untrusted'
+    if mode=='cross_domain':
+        if plan.intent!='transfer' or not {'financial_health_report','check_funding_ready'}<=set(allowed_reads):raise DagProposalError('cross-domain funding source unavailable for this identity/backend')
+        value,_=generate(plan,registry,allowed_reads,mode='offline')
+        used={n['id'] for n in value['nodes']};report='finance_report';gate='funding_condition'
+        while report in used:report+='x'
+        while gate in used or gate==report:gate+='x'
+        value['nodes'] += [{'id':report,'kind':'action','tool':'financial_health_report','depends_on':[]},
+                           {'id':gate,'kind':'action','tool':'check_funding_ready','depends_on':[report]}]
+        writes={s.id for s in plan.steps if registry[s.tool]['side_effect']}
+        for node in value['nodes']:
+            if node.get('step_ref') in writes:node['depends_on'].append(gate)
+        return value,'offline_cross_domain'
     if mode!='offline':raise DagProposalError('unknown planner mode')
     nodes=[]
     if plan.intent=='transfer':
@@ -59,7 +71,7 @@ def generate(plan,registry,allowed_reads,*,mode='offline',client=None):
             if registry[s.tool]['side_effect']:
                 nodes.append({'id':s.id,'kind':'action','step_ref':s.id,'depends_on':join[:]});join=[s.id]
     else:
-        prior=[]
+        prior = []
         for s in plan.steps:
             nodes.append({'id':s.id,'kind':'action','step_ref':s.id,'depends_on':prior[:]});prior=[s.id]
     return {'schema':1,'nodes':nodes},'offline_structured'
@@ -122,6 +134,11 @@ def review(plan,proposal,registry,allowed_reads,*,now=None):
             ancestors[n.node_id]=set(n.depends_on)
             for dep in n.depends_on:ancestors[n.node_id].update(ancestors[dep])
             depth[n.node_id]=1+max((depth[d] for d in n.depends_on),default=0)
+        reports=[n for n in nodes if n.tool=='financial_health_report'];conditions=[n for n in nodes if n.tool=='check_funding_ready']
+        if reports or conditions:
+            if plan.intent!='transfer' or len(reports)!=1 or len(conditions)!=1:raise ValueError('one funding report and condition required for transfer composition')
+            if reports[0].node_id not in ancestors[conditions[0].node_id]:raise ValueError('funding condition must depend on actual report')
+            if any(conditions[0].node_id not in ancestors[refs[s.id]] for s in plan.steps if registry[s.tool]['side_effect']):raise ValueError('financial condition must precede payment')
         prior=[]
         for s in plan.steps:
             if registry[s.tool]['side_effect'] and not set(prior)<=ancestors[refs[s.id]]:

@@ -87,12 +87,13 @@ class BudgetConstraintTests(unittest.TestCase):
 
     def test_chat_budget_conflict_requires_user_choice_and_does_not_queue_or_debit(self):
         self.runtime.bank.confirmed_commitments = [
-            {"id": "rent", "name": "本月房租", "amount_cents": 2_600_000, "status": "confirmed"},
+            {"id": "rent", "name": "本月房租", "amount_cents": 40_000_000, "status": "confirmed"},
             {"id": "card", "name": "信用卡还款", "amount_cents": 1_000_000, "status": "confirmed"},
         ]
         before_balance = self.runtime.bank.available_balance()
-        response = self.runtime.chat("给妈妈转 240000 元")
+        response = self.runtime.chat("给妈妈转 1 元")
         self.assertFalse(response["ok"])
+        self.assertEqual(response["plan"]["preflight"]["checks"]["daily_limit"]["status"], "satisfied")
         self.assertEqual(response["plan"]["preflight"]["checks"]["budget"]["status"], "missing")
         self.assertFalse(response["plan_view"]["requires_confirmation"])
         self.assertEqual(response["budget_options"], ["adjust_amount", "adjust_budget", "defer", "human_handoff"])

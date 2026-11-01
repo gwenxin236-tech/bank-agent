@@ -169,7 +169,7 @@ python app/banking_agent.py
 | Docker | PASS；引擎恢复后最终代码重新构建，28项隔离容器检查通过。镜像bank-agent-qa:t04-20261023-211431-988474，ID前缀c10afa52bee1；报告data/verification/t04-20261023-211431-988474/report.json |
 
 - 基础批第5节是历史记录，当前扩展最终快照以本节和`docs/验收摘要.json`为准。本批真实embedding及隔离容器另有实际通过记录，不把替身结果作为其替代。离线包导出与第二台电脑复验仍属P11/T14，本批镜像验收不代替这些交付。
-- 本服务是平台能力，不改变成员DomainContext/Finding/Proposal ABI，也不允许成员将知识引用塞进银行事实快照绕过Supervisor相等核验。
+- 本服务是平台能力，不改变成员DomainContext/Finding/Proposal ABI，也不允许成员将知识引用纳入银行事实快照绕过Supervisor相等核验。
 
 
 ## **8. 可迁移的离线向量语义检索（2026-10-23）**

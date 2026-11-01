@@ -172,11 +172,10 @@ class TechnicalFigure(Flowable):
         self.note('相同商户、金额、日期不足以认定重复；coverage 明确来源边界',17)
 
     def draw_testcounts(self):
-        folder=self.root/'data/verification/finalize-20261031/batch05'
-        report=json.loads((folder/'full-final.json').read_text(encoding='utf-8'))
-        counts=Counter(re.findall(r'(?m)^test_\w+ \((test_\w+)\.',(folder/'full-final.log').read_text(encoding='utf-8')))
-        if sum(counts.values())!=report['tests_run']:raise ValueError('actual test module counts mismatch')
-        record={'total':report['tests_run'],'modules':counts}
+        evidence=json.loads((self.root/'docs/assets/N16发行验收.json').read_text(encoding='utf-8'))
+        counts=evidence['test_modules'];total=evidence['regression']['current_full_windows']['tests']
+        if sum(counts.values())!=total:raise ValueError('actual test module counts mismatch')
+        record={'total':total,'modules':counts}
         names=[('test_auth_credentials','认证凭据'),('test_task_dag','DAG原语'),('test_dag_integration','DAG集成'),('test_supervisor_integration','多域主链'),('test_handoff_queue','本地接管'),('test_banking_flow_ux','交互与浏览器'),('test_birthday_linkage','生日联动')]
         counts=record['modules'];maximum=max(counts.get(k,0) for k,_ in names)
         self.tag(0,248,'指定测试模块的实际执行数')
@@ -187,14 +186,14 @@ class TechnicalFigure(Flowable):
         self.note('全部 '+str(record['total'])+' 项来自实际完整报告；此图仅列部分模块，不是覆盖率',10)
 
     def draw_deployment(self):
-        self.tag(0,248,'当前离线发行 / 物理异机仍待验',TEAL)
-        self.box(0,149,224,70,'维护者准备', ['当前源码 + 可信基础镜像','构建 / 导出 / 哈希清单'],BLUE)
-        self.box(276,149,224,70,'完整离线目录',['应用/沙箱 + 本地RAG/重排/OCR','校验后 load；无 build / pull'],TEAL)
+        self.tag(0,248,'当前源码 / 新镜像未构建 / 物理异机待验',TEAL)
+        self.box(0,149,224,70,'维护者准备', ['当前源码与原始验收','Docker损坏，构建待验'],BLUE)
+        self.box(276,149,224,70,'历史三配置回退',['模型/依赖随旧镜像保留','校验后导入，不冒称当前功能'],TEAL)
         self.arrow([(224,184),(276,184)],TEAL)
         self.box(0,38,224,70,'接收方前置环境',['兼容 Linux/amd64 Docker 引擎','不随源码安装 / 非任意系统承诺'],BLUE)
         self.box(276,38,224,70,'目标电脑验收',['校验 → load → 本地启动','实际断网复核与保留验收记录'],AMBER)
         self.arrow([(388,149),(388,108)],AMBER,True);self.arrow([(224,73),(276,73)],BLUE)
-        self.note('标准包53项 / 身份32项 / Fineract25项通过；虚线为第二台物理电脑待验',12)
+        self.note('旧版53/32/25项仅属历史；新镜像/第二台物理电脑均待验',12)
 
     def draw_rag(self):
         self.tag(0,288,'本机向量 + 独立重排 / 访问权限前后复核')

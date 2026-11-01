@@ -123,31 +123,31 @@ class D1SecurityTests(unittest.TestCase):
         p = out['plan']
         return p, {'plan_id': p['plan_id'], 'action_token': p['consent_token']}
 
-    def test_missing_subscription_id_is_rejected_without_any_cancellation(self):
+    def test_missing_subscription_id_requires_query_consent_without_cancellation(self):
         before = copy.deepcopy(self.rt.bank.subscriptions)
-        with patch.object(self.rt.bank, 'cancel_subscription', wraps=self.rt.bank.cancel_subscription) as cancel:
+        with patch.object(self.rt.bank, 'cancel_subscription', wraps=self.rt.bank.cancel_subscription) as cancel, \
+             patch.object(self.rt.bank, 'subscriptions_query', wraps=self.rt.bank.subscriptions_query) as query:
             balance = self.rt.bank.balance().data
             status, out = self.http('POST', '/api/chat', {'message': '取消订阅'}, 'demo-user-session')
             self.assertEqual(status, 200)
-            self.assertFalse(out['ok'])
-            self.assertTrue(out['blocked'])
-            self.assertEqual(out['result']['status'], 'FAILED')
-            self.assertIn('请说明要取消哪个订阅', out['message'])
+            self.assertTrue(out['ok'])
+            self.assertNotIn('result', out)
+            self.assertTrue(out['plan_view']['requires_confirmation'])
+            query.assert_not_called()
             self.assertEqual(self.rt.bank.subscriptions, before)
             self.assertEqual(self.rt.bank.balance().data, balance)
             self.assertEqual(self.rt.bank.db.execute('SELECT count(*) FROM core_transactions').fetchone()[0], 0)
-            self.assertNotIn(out['plan']['plan_id'], self.rt.pending)
+            self.assertIn(out['plan']['plan_id'], self.rt.pending)
             self.assertEqual(self.rt.bank.idempotency_results, {})
             cancel.assert_not_called()
         events = self.rt.audit.list_for_trace(out['trace_id'])
-        self.assertTrue(any(e['event_type'] == 'tool.denied' and e['payload'].get('reason') == 'SUBSCRIPTION_TARGET_REQUIRED' for e in events))
-        self.assertTrue(any(e['event_type'] == 'tool.failed' and e['payload'].get('error_code') == 'SUBSCRIPTION_TARGET_REQUIRED' for e in events))
+        self.assertFalse(any(e['event_type'] in {'tool.called','tool.result','task.settled'} for e in events))
         self.assertTrue(self.rt.audit.verify_trace(out['trace_id'])['valid'])
 
     def test_missing_target_is_also_rejected_at_execution_boundary(self):
         plan = self.rt.planner.build('取消订阅')
         with patch.object(self.rt.bank, 'cancel_subscription') as cancel:
-            result = self.rt._execute_step(plan, plan.steps[-1])
+            result = self.rt._execute_step(plan, ba.PlanStep('forged', '取消订阅', 'cancel_subscription'))
         self.assertFalse(result.ok)
         self.assertEqual(result.error_code, 'SUBSCRIPTION_TARGET_REQUIRED')
         cancel.assert_not_called()
@@ -161,7 +161,8 @@ class D1SecurityTests(unittest.TestCase):
         view = json.dumps(out['plan_view'], ensure_ascii=False)
         self.assertIn('某视频会员', view)
         self.assertIn('25.00', view)
-        self.assertIn('建议', view)
+        self.assertIn('申请停止', view)
+        self.assertIn('确认后核验办理条件', view)
         self.assertIn('某视频会员', out['plan_view']['plain_summary'])
         self.assertIn('25.00', ' '.join(out['plan_view']['details']))
         self.assertTrue(out['plan_view']['requires_confirmation'])
