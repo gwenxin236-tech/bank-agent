@@ -48,6 +48,21 @@ def acceptable(success, count, skipped, resource_warnings, unchanged):
     return bool(success and count > 0 and skipped == 0 and resource_warnings == 0 and unchanged)
 
 
+def partition(tests, index, count):
+    """Balance modules deterministically; never split module/class fixtures."""
+    if not 1 <= count <= 16 or not 0 <= index < count:
+        raise ValueError('invalid CI shard')
+    modules = {}
+    for test in tests:
+        modules.setdefault(test.__class__.__module__, []).append(test)
+    loads, owners = [0] * count, {}
+    for module in sorted(modules, key=lambda name: (-len(modules[name]), name)):
+        owner = min(range(count), key=lambda i: (loads[i], i))
+        owners[module] = owner
+        loads[owner] += len(modules[module])
+    return [test for test in tests if owners[test.__class__.__module__] == index]
+
+
 def run_suite(suite, output, stall_seconds=0):
     """A stalled CI worker fails; diagnostics contain locations, never locals."""
     output = Path(output)
@@ -115,7 +130,7 @@ def safe_environment(original, database):
     return env
 
 
-def worker(scope, output):
+def worker(scope, output, shard_index=0, shard_count=1):
     sys.path[:0] = [str(ROOT / 'app'), str(ROOT / 'tests'), str(ROOT / 'scripts')]
     daily = ROOT / 'data/banking_agent.sqlite3'; before = digest(daily)
     source_files = {p.relative_to(ROOT).as_posix(): digest(p) for directory in ('app', 'tests', 'scripts', 'config')
@@ -125,6 +140,8 @@ def worker(scope, output):
         warnings.simplefilter('always', ResourceWarning)
         discovered = list(leaves(unittest.defaultTestLoader.discover(str(ROOT / 'tests'))))
         selected, excluded = select(discovered, scope)
+        scope_total = len(selected)
+        selected = partition(selected, shard_index, shard_count)
         stall = int(os.getenv('BANK_CI_TEST_TIMEOUT_SECONDS', '0'))
         if not 0 <= stall <= 900:
             raise ValueError('invalid CI test timeout')
@@ -140,6 +157,8 @@ def worker(scope, output):
     source_unchanged = all(digest(ROOT / name) == value for name, value in source_files.items())
     report = {'schema': 1, 'status': 'PASS' if acceptable(result.wasSuccessful(), result.testsRun, len(result.skipped), len(leaks), unchanged and source_unchanged) else 'FAIL',
               'scope': scope, 'tests_run': result.testsRun, 'discovered': len(discovered),
+              'shard_index': shard_index, 'shard_count': shard_count, 'scope_total': scope_total,
+              'selected_tests': [test.id() for test in partition(select(discovered, scope)[0], shard_index, shard_count)],
               'skipped': len(result.skipped), 'resource_warnings': len(leaks), 'excluded': excluded,
               'failures': len(result.failures), 'errors': len(result.errors),
               'original_database_unchanged': unchanged, 'sources_unchanged': source_unchanged,
@@ -154,15 +173,20 @@ def main():
     parser.add_argument('--scope', choices=('core', 'browser', 'full'), default='core')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--worker', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--shard-index', type=int, default=0)
+    parser.add_argument('--shard-count', type=int, default=1)
     args = parser.parse_args(); output = args.output.resolve()
+    if not 1 <= args.shard_count <= 16 or not 0 <= args.shard_index < args.shard_count:
+        parser.error('invalid CI shard')
     if output.exists(): parser.error('fresh report path required')
     output.parent.mkdir(parents=True, exist_ok=True)
-    if args.worker: return worker(args.scope, output)
+    if args.worker: return worker(args.scope, output, args.shard_index, args.shard_count)
     with tempfile.TemporaryDirectory(prefix='bank-ci-') as tmp:
         env = safe_environment(os.environ, Path(tmp) / 'isolated.sqlite3')
         command = [sys.executable]
         if os.name == 'nt': command += ['-X', 'utf8=0']
-        command += [str(Path(__file__).resolve()), '--worker', '--scope', args.scope, '--output', str(output)]
+        command += [str(Path(__file__).resolve()), '--worker', '--scope', args.scope, '--output', str(output),
+                    '--shard-index', str(args.shard_index), '--shard-count', str(args.shard_count)]
         try:
             result = subprocess.run(command, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=900)
             log = result.stdout.decode(locale.getencoding(), errors='replace')

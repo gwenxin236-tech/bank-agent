@@ -1869,14 +1869,21 @@
     "preserve_member_history": true,
     "force_push": false,
     "ci_diagnostic": {
-      "current_discovered_tests": 967,
+      "current_discovered_tests": 969,
       "added_tests": 2,
       "targeted_tests_passed": 17,
       "record": "data/verification/pr1-integration-20261101/ci-progress-final-green.log",
       "suite_timeout_seconds": 900,
       "core_single_test_stall_seconds": 120,
       "business_code_changed": false,
-      "remote_ci": "PENDING"
+      "remote_ci": "PENDING",
+      "windows_partition": {
+        "shards": 4,
+        "module_fixtures_preserved": true,
+        "core_tests_expected": 943,
+        "coverage_gate": "disjoint shard ID union must equal full Linux core ID set",
+        "status": "REMOTE_PENDING"
+      }
     }
   }
 }

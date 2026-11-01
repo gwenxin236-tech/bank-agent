@@ -9,6 +9,27 @@ import unittest
 
 
 class CIProgressTests(unittest.TestCase):
+    def test_module_shards_are_disjoint_complete_and_keep_module_fixtures_together(self):
+        from ci_verify import partition
+        cases = []
+        for module, count in [('alpha', 7), ('beta', 3), ('gamma', 5), ('delta', 2), ('epsilon', 4)]:
+            cls = type('Fixture', (unittest.TestCase,), {'__module__': module, 'runTest': lambda self: None})
+            cases.extend(cls() for _ in range(count))
+        groups = [partition(cases, i, 4) for i in range(4)]
+        self.assertEqual(sorted(id(t) for g in groups for t in g), sorted(map(id, cases)))
+        for module in {t.__class__.__module__ for t in cases}:
+            self.assertEqual(sum(any(t.__class__.__module__ == module for t in g) for g in groups), 1)
+        self.assertEqual([[id(t) for t in g] for g in groups],
+                         [[id(t) for t in partition(cases, i, 4)] for i in range(4)])
+
+    def test_invalid_shards_are_rejected_and_single_shard_preserves_order(self):
+        from ci_verify import partition
+        cases = [unittest.FunctionTestCase(lambda: None)]
+        self.assertEqual(partition(cases, 0, 1), cases)
+        for index, count in [(-1, 4), (4, 4), (0, 0), (0, 17)]:
+            with self.subTest(index=index, count=count), self.assertRaises(ValueError):
+                partition(cases, index, count)
+
     def run_child(self, body):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / 'probe.json'
