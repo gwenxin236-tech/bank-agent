@@ -251,6 +251,26 @@ class RecoveryTests(unittest.TestCase):
             handler.path = '/readyz'
             self.assertEqual(handler.do_GET()[0], 503)
 
+    def test_drill_http_budget_is_bounded_and_uncertain_writes_are_not_retried(self):
+        from drill_recovery import RecoveryDrill, DrillFailure
+        drill = RecoveryDrill(self.tmp.name, 30)
+        drill.base = 'http://127.0.0.1:1'
+        with patch.object(drill.opener, 'open', side_effect=TimeoutError) as request:
+            with self.assertRaises(DrillFailure) as failure:
+                drill.request('/api/confirm', {'private_body': 'NEVER_ECHO_THIS_BODY'})
+            request.assert_called_once()
+            self.assertEqual(request.call_args.kwargs['timeout'], 10)
+            self.assertIn('/api/confirm', str(failure.exception))
+            self.assertNotIn('NEVER_ECHO_THIS_BODY', str(failure.exception))
+        from io import BytesIO
+        limited = RecoveryDrill(self.tmp.name, .75)
+        limited.base = drill.base
+        response = BytesIO(b'{}')
+        response.status = 200
+        with patch.object(limited.opener, 'open', return_value=response) as request:
+            self.assertEqual(limited.request('/readyz'), (200, {}))
+            self.assertEqual(request.call_args.kwargs['timeout'], .75)
+
     @unittest.skipUnless(os.getenv('C8_RUN_DRILL') == '1', 'opt-in local subprocess/HTTP drill')
     def test_real_sigkill_drill(self):
         run = subprocess.run([sys.executable, str(ROOT / 'scripts/drill_recovery.py')],
