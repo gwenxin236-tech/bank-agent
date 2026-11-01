@@ -11,7 +11,7 @@
   },
   "pdf": {
     "path": "submission/澜银行AI智能体_技术文档.pdf",
-    "sha256": "c8aab725bf726704671b92024b19f5c273cdf31dbd206bd73d1337101ca811de",
+    "sha256": "537df59ebbc7b298e6f01f4f27072fd5201aadcc761793719235749d1ea9dc5c",
     "bytes": 1970027,
     "pages": 64,
     "source_references": 74,
@@ -26,9 +26,10 @@
       "citations": "superscript, 6.8pt, raised 4pt",
       "code": "Consolas 8.6pt, SimSun CJK fallback, snippet line numbers, light gray panel"
     },
-    "full_page_render_directory": "private verification/pdf-final/render-r2",
-    "visual_review": "All 64 pages rendered and reviewed in four contact sheets; architecture, code and current regression pages additionally inspected at page size. No clipping or blank pages detected.",
-    "rendered_pages": 64
+    "full_page_render_directory": "private verification/pdf-final/render-r3",
+    "visual_review": "All 64 final pages rendered again; pixel-identical to individually sampled and full contact-sheet reviewed prior revision. Only cited source-version receipts and PDF metadata refreshed.",
+    "rendered_pages": 64,
+    "pixel_identical_after_reference_correction": true
   },
   "presentation": {
     "path": "submission/澜银行AI智能体_答辩_v2.pptx",
