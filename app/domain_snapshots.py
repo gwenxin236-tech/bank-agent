@@ -5,7 +5,8 @@ Source ownership/authorization is enforced by the caller's existing execution
 plane; the demo's globally scoped subscription/card/family tools are additionally
 restricted here to their actual owner. These are not signed attestations.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass,field
+from datetime import datetime,timezone
 from collections.abc import Mapping
 
 from domain_agent_contract import DOMAIN_NAMES, DomainFinding, DomainProposal, thaw
@@ -19,6 +20,7 @@ class DomainSnapshot:
     facts: tuple
     evidence: tuple
     status: str = 'known'
+    captured_at: str = field(default_factory=lambda:datetime.now(timezone.utc).isoformat())
 
     def __post_init__(self):
         if self.domain not in DOMAIN_NAMES - {'payment'} or self.status not in {'known', 'unknown'}:
@@ -35,7 +37,7 @@ def _snapshot(ctx, domain, values, source, status='known'):
 
 def policy_snapshot(ctx, decision):
     # Existing risk_controls features only; never re-implement PolicyEngine.
-    values = {k: decision[k] for k in ('risk_score', 'risk_factors', 'aml_suspect', 'aml_count', 'recent_transfer_count') if k in decision}
+    values = {k: decision[k] for k in ('risk_score', 'risk_factors', 'aml_suspect', 'aml_count', 'recent_transfer_count','semantic_evidence') if k in decision}
     source = 'risk_controls.py:assess_transfer_risk' if 'assessed_at' in decision else 'banking_agent.py:PolicyEngine.classify'
     if 'risk_score' not in values or 'risk_factors' not in values:
         return _snapshot(ctx, 'antifraud', {}, source, 'unknown')
@@ -91,7 +93,7 @@ def tool_snapshot(ctx, domain, result):
             return _snapshot(ctx, domain, {}, source, 'unknown')
         values = {'consumer': {k: consumer[k] for k in ('total_cents','by_category') if k in consumer},
                   'cash_flow': {k: cash[k] for k in ('inflow_cents','outflow_cents','net_outflow_cents','label') if k in cash},
-                  'funds': data.get('funds_status', {}), 'coverage': data.get('coverage', {})}
+                  'funds': data.get('funds_status', {}), 'coverage': data.get('coverage', {}),'funding_plan':data.get('funding_plan',{})}
     elif domain == 'subscription':
         items = data.get('items')
         if not isinstance(items, list):

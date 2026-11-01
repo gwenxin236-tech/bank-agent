@@ -46,6 +46,34 @@ def allowed(name):
     return classify_path(name) == 'CANDIDATE_TEXT'
 
 
+def material_evidence(root, value=None):
+    """Validate current material claims without executing bank or Docker actions."""
+    root = Path(root).resolve()
+    if value is None:
+        value = json.loads((root / 'docs/assets/N16发行验收.json').read_text(encoding='utf-8'))
+    full = value.get('regression', {}).get('current_full_windows', {})
+    if (full.get('status') != 'PASS' or type(full.get('tests')) is not int or full['tests'] <= 0
+            or any(type(full.get(k)) is not int or full[k] != 0 for k in ('skipped','resource_warnings','failures','errors'))):
+        raise ValueError('Materials require a passing, zero-skip, zero-warning regression')
+    files = value.get('source_files')
+    if not isinstance(files, dict) or not files: raise ValueError('Current source hashes required')
+    for name, expected in files.items():
+        path = root / name
+        if (not safe_name(name) or name.split('/')[0] not in ('app','tests','scripts','config')
+                or path.is_symlink() or not path.resolve().is_relative_to(root) or not path.is_file()
+                or sha(path.read_bytes()) != expected):
+            raise ValueError('Material source hash mismatch: ' + name)
+    offline = value.get('offline', {})
+    if offline.get('status') not in ('PASS','PENDING_DOCKER_ENGINE'):
+        raise ValueError('Explicit current offline status required')
+    if offline['status'] == 'PASS':
+        linux = value['regression'].get('current_core_linux', {})
+        profiles = offline.get('profiles', {})
+        if linux.get('status') != 'PASS' or any(profiles.get(k, {}).get('status') != 'PASS' for k in ('standard','identity','fineract')):
+            raise ValueError('Runtime pass requires current Linux and all profile receipts')
+    return value
+
+
 def candidates(root):
     # Only enumerate approved roots. Never descend into private/state directories.
     def walk(folder):
@@ -140,11 +168,14 @@ def extract(archive, destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('build', 'verify', 'extract'))
+    parser.add_argument('action', choices=('build', 'verify', 'extract', 'evidence'))
     parser.add_argument('archive', type=Path)
     parser.add_argument('--root', type=Path, default=ROOT)
     parser.add_argument('--destination', type=Path)
     args = parser.parse_args()
+    if args.action == 'evidence':
+        print(json.dumps(material_evidence(args.root, json.loads(args.archive.read_text(encoding='utf-8'))), ensure_ascii=True))
+        return
     if args.action == 'build': result = build(args.root, args.archive)
     elif args.action == 'verify': result = verify(args.archive)
     else:

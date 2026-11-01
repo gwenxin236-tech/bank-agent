@@ -81,7 +81,11 @@ class SupervisorTests(SnapshotFixture, unittest.TestCase):
         raw=thaw(report);raw['checks']['available_funds']['status']='unknown'
         changed=dict(sources,payment=PaymentSnapshot.from_preflight(ctx,raw))
         self.assertEqual(supervisor.coordinate(ctx,'transfer',changed).status,'needs_review')
+        # This amount exceeds the daily limit as well as the disposable budget.
         ctx,sources,supervisor=self.bundle(29000000)
+        self.assertEqual(supervisor.coordinate(ctx,'transfer',sources).status,'needs_review')
+        self.rt.bank.confirmed_commitments=[{'id':'rent','name':'房租','amount_cents':40000000,'status':'confirmed'}]
+        ctx,sources,supervisor=self.bundle(100)
         self.assertEqual(supervisor.coordinate(ctx,'transfer',sources).status,'needs_user_choice')
 
     def test_plan_template_gate_cannot_add_steps_or_change_entities(self):

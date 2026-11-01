@@ -156,16 +156,24 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
         handler._body=lambda:{'text':'请核对。','consent':True}
         handler._send=lambda *args:args
         family=Mock()
+        audit=Mock()
         family.http_context.return_value={'ok':False,'message':'denied'}
-        with patch.object(ba,'runtime',SimpleNamespace(family=family)), \
+        with patch.object(ba,'runtime',SimpleNamespace(family=family, audit=audit)), \
              patch.object(ba.http_rate_limiter,'allow',return_value=True), \
              patch.object(ba,'TTSOutput') as tts:
             self.assertEqual(handler._do_POST()[0],403)
             tts.assert_not_called()
             family.http_context.return_value={'ok':True,'user_id':'demo-user','device_id':'demo-device'}
-            tts.return_value.synthesize.return_value={'ok':True,'audio':b'ID3audio'}
+            def audited_synthesis(text, **kwargs):
+                import hashlib
+                kwargs['before_outbound']({'text_sha256':hashlib.sha256(text.encode()).hexdigest(),
+                                           'text_characters':len(text)})
+                return {'ok':True,'audio':b'ID3audio','outbound_attempted':True}
+            tts.return_value.synthesize.side_effect=audited_synthesis
             self.assertEqual(handler._do_POST(),(200,b'ID3audio','audio/mpeg'))
             self.assertTrue(family.http_context.call_args.kwargs['required'])
+            self.assertEqual([call.args[1] for call in audit.write.call_args_list],
+                             ['tts.rejected','tts.requested','tts.outbound','tts.completed'])
 
     def test_offline_and_missing_consent_never_start_worker(self):
         with patch('tts_output.subprocess.run') as run:
@@ -186,7 +194,8 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
         with patch.dict(os.environ, {'BANK_AGENT_OFFLINE':'0','TTS_ENABLED':'1'}, clear=True), \
              patch('tts_output.importlib.util.find_spec', return_value=object()), \
              patch('tts_output.subprocess.run', return_value=subprocess.CompletedProcess([],0,b'ID3'+b'x'*120,b'')) as run:
-            result = TTSOutput().synthesize('已转账5000元。', consent=True, voice='zh-CN-XiaoxiaoNeural', rate=-8)
+            result = TTSOutput().synthesize('已转账5000元。', consent=True, voice='zh-CN-XiaoxiaoNeural', rate=-8,
+                                            before_outbound=lambda metadata: None)
             self.assertTrue(result['ok'])
             args, kwargs = run.call_args
             self.assertNotIn('5000', kwargs['input'].decode())
@@ -205,7 +214,7 @@ const {chromium}=require(process.env.C7_PLAYWRIGHT_MODULE);const assert=require(
                 self.assertFalse(tts.synthesize(consent=True, **kwargs)['ok'])
             run.assert_not_called()
             run.side_effect=subprocess.TimeoutExpired('private contents',20)
-            out=tts.synthesize('请核对。',consent=True)
+            out=tts.synthesize('请核对。',consent=True,before_outbound=lambda metadata: None)
             self.assertFalse(out['ok'])
             self.assertNotIn('private',str(out))
             run.assert_called_once()

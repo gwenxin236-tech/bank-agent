@@ -73,7 +73,10 @@ jobs:
           echo "C7_NODE_BINARY=$(command -v node)" >> "$GITHUB_ENV"
           echo "C7_PLAYWRIGHT_MODULE=$RUNNER_TEMP/bank-browser-qa/node_modules/playwright/index.js" >> "$GITHUB_ENV"
       - name: JavaScript syntax
-        run: node --check app/static/app.js
+        run: |
+          node --check app/static/app.js
+          node --check app/static/speech-output.js
+          node tests/test_speech_output.js
       - name: Browser tests, zero skips
         env:
           PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.qa-tools/browsers

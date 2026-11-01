@@ -139,7 +139,7 @@ class OCRService:
             with self._lock:
                 self._drafts={k:v for k,v in self._drafts.items() if v['expires']>self.clock()}
                 if len(self._drafts)>=32:return self.failure('draft_limit')
-                self._drafts[draft]={'owner':owner,'device':device,'expires':self.clock()+300,'sha256':digest,'flags':sorted(flags),'source_trace_id':trace_id}
+                self._drafts[draft]={'owner':owner,'device':device,'expires':self.clock()+300,'sha256':digest,'flags':sorted(flags),'source_trace_id':trace_id,'field_evidence':{kind:[{'line':v['line'],'confidence_milli':int(round(v['confidence']*1000)),'box':[[int(round(c)) for c in point] for point in lines[v['line']]['box']]} for v in candidates[:8]] for kind,candidates in [('amount',amounts),('recipient',recipients)]}}
             return {'ok':True,'mode':'local_ocr','draft_id':draft,'sha256':digest,'width':width,'height':height,'lines':lines,
                     'fields':fields,'candidates':{'amount':amounts,'recipient':recipients},'flags':sorted(flags),'expires_in_seconds':300,
                     'requires_review':True,'business_executed':False,'image_persisted':False}
@@ -164,7 +164,7 @@ class OCRService:
             self._reviewed={k:v for k,v in self._reviewed.items() if v['expires']>self.clock()}
             if len(self._reviewed)>=32:raise ValueError('review draft budget exceeded')
             self._drafts.pop(draft_id)
-            token='ocr_review_'+secrets.token_hex(16);self._reviewed[token]={**saved,'expires':self.clock()+300}
+            token='ocr_review_'+secrets.token_hex(16);self._reviewed[token]={**saved,'expires':self.clock()+300,'reviewed_fields_sha256':hashlib.sha256((recipient.strip()+':'+str(cents)).encode()).hexdigest(),'reviewed_recipient':recipient.strip(),'reviewed_amount_cents':cents}
         return {'ok':True,'draft_text':f'给{recipient.strip()}转{cents//100}.{cents%100:02d}元','amount_cents':cents,'recipient':recipient.strip(),
                 'review_token':token,'source_trace_id':saved['source_trace_id'],
                 'sha256':saved['sha256'],'business_executed':False,'requires_platform_confirmation':True,
@@ -175,4 +175,4 @@ class OCRService:
             row=self._reviewed.get(token)
             if not row or row['owner']!=owner or row['device']!=device or row['expires']<=self.clock():raise PermissionError('invalid OCR evidence')
             self._reviewed.pop(token)
-        return {k:row[k] for k in ('sha256','source_trace_id')}
+        return {k:row[k] for k in ('sha256','source_trace_id','reviewed_fields_sha256','reviewed_recipient','reviewed_amount_cents','field_evidence') if k in row}

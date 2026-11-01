@@ -1,5 +1,6 @@
 """Optional online speech output. No bank tools, disk audio or mandatory dependency."""
 import asyncio
+import hashlib
 import importlib.util
 import json
 import os
@@ -30,9 +31,12 @@ class TTSOutput:
                 'voices': VOICES, 'cloud_redaction': True, 'audio_persisted': False,
                 'reason': 'ready' if enabled and installed else 'disabled' if not enabled else 'missing_dependency'}
 
-    def synthesize(self, text, *, consent=False, voice='zh-CN-XiaoxiaoNeural', rate=-8):
+    def synthesize(self, text, *, consent=False, voice='zh-CN-XiaoxiaoNeural', rate=-8,
+                   before_outbound=None):
+        attempted = False
         def failure(reason):
-            return {'ok': False, 'reason': reason, 'message': '自然语音暂不可用，请阅读页面文字或选择本机语音。'}
+            return {'ok': False, 'reason': reason, 'outbound_attempted': attempted,
+                    'message': '自然语音暂不可用，请阅读页面文字或选择本机语音。'}
         if consent is not True:
             return failure('consent_required')
         if (not isinstance(text, str) or not 1 <= len(text.strip()) <= 600 or not isinstance(voice, str) or voice not in VOICES
@@ -40,17 +44,26 @@ class TTSOutput:
             return failure('invalid_request')
         if not self.capabilities()['available']:
             return failure('unavailable')
+        if not callable(before_outbound):
+            return failure('audit_required')
         if not _slots.acquire(blocking=False):
             return failure('busy')
         try:
-            payload = json.dumps({'text': redact_speech(text), 'voice': voice, 'rate': rate}, ensure_ascii=False).encode('utf-8')
+            redacted = redact_speech(text)
+            payload = json.dumps({'text': redacted, 'voice': voice, 'rate': rate}, ensure_ascii=False).encode('utf-8')
+            try:
+                before_outbound({'text_sha256': hashlib.sha256(redacted.encode('utf-8')).hexdigest(),
+                                 'text_characters': len(redacted)})
+            except Exception:
+                return failure('audit_unavailable')
+            attempted = True
             result = subprocess.run([sys.executable, str(Path(__file__).resolve()), '--worker'], input=payload,
                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=22,
                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             audio = result.stdout
             if result.returncode or not 32 < len(audio) <= MAX_BYTES or not (audio.startswith(b'ID3') or audio[0] == 255):
                 return failure('provider_error')
-            return {'ok': True, 'audio': audio}
+            return {'ok': True, 'audio': audio, 'outbound_attempted': True}
         except (OSError, subprocess.TimeoutExpired):
             return failure('provider_unavailable')
         finally:

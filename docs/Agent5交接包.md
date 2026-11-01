@@ -1,6 +1,9 @@
 # Agent 5 订阅治理交接包
 
-成员：李苏润（二狗）；domain：`subscription`。发布基线 `0c6608f`，领域分支 `feature/lisurun-subscription`，领域提交 `7ea8591`；本机集成分支 `feature/lisurun-agent56-live`。本次主链修复前基线 `3be21a0`；交付源码以[联合验收记录](Agent56验收记录.json)的文件摘要及包含本包的提交为准。
+> 成员历史交接资料：本文件来自PR #1的原提交81ea8acd，文中验收数字、源码指纹与环境描述仅属于当时版本。当前集成范围及965项本地分组验收见[PR1集成与验收](PR1集成与验收.md)。本次已规范成员姓名；原始文本仍可从原提交查阅。供应方或依赖的旧环境授权不构成本项目当前安装、联网或生产验收授权。
+
+
+成员：李苏润；domain：`subscription`。发布基线 `0c6608f`，领域分支 `feature/lisurun-subscription`，领域提交 `7ea8591`；本机集成分支 `feature/lisurun-agent56-live`。本次主链修复前基线 `3be21a0`；交付源码以[联合验收记录](Agent56验收记录.json)的文件摘要及包含本包的提交为准。
 
 ## 可用于 PR 的变更说明
 

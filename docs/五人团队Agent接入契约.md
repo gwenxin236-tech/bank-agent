@@ -1,8 +1,8 @@
 # 五人团队 Agent 接入契约与平台先行交付流程
 
-版本：2026-10-23 / 团队协作契约 v1.0。适用范围：当前副本及其后经负责人发布的团队开发基线。
+版本：2026-10-31 / 团队协作契约 v1.1（N01/N02分工更新；Python ABI不变）。适用范围：当前副本及其后经负责人发布的团队开发基线。
 
-本文件依据负责人本次确认的分工与范围编写，复用已存在的 Python 接口；不是另建一套 Agent 框架。本文中的“冻结”是团队兼容规则，不表示本批新增了自动化版本锁。主 Agent、监督 Agent、支付 Agent 和公共平台由负责人维护，其他四位成员在同一基线上完善五个独立领域模块。
+本文件依据负责人本次确认的分工与范围编写，复用已存在的 Python 接口；不是另建一套 Agent 框架。本文中的“冻结”是团队兼容规则，不表示本批新增了自动化版本锁。项目负责人宫文馨统筹主Agent、监督Agent、公共平台及支付、反诈、财务健康、家庭授权四域的集成开发；订阅治理与卡片管理由李苏润负责。2026-10-23的原五人安排保留为历史，不再据此等待前三位成员交付。
 
 **状态约定：**“当前可用”必须有代码/测试证据；“团队约定”从本文件执行；“待实现”仅为下一阶段目标；“待外部接入”必须取得实际平台、账号与接口后联调，不能用 Mock 或大模型回答替代。
 
@@ -10,14 +10,14 @@
 
 | 成员 | domain / 职责 | 默认可修改的现有文件 | 建议功能分支 |
 |---|---|---|---|
-| 项目负责人（你） | payment：支付与交易；主 Agent、监督 Agent和全部公共平台 | `app/agents/payment_agent.py`、`app/transaction_agent.py`、对应测试；公共文件统一由负责人维护 | `feature/lead-payment`；公共能力另开 `feature/platform-<topic>` |
-| 董哥 | antifraud：反诈风控 | `app/agents/antifraud_agent.py`、`tests/test_antifraud_agent.py` | `feature/dongge-antifraud` |
-| 李狗 | finance_health：财务健康 | `app/agents/finance_health_agent.py`、`tests/test_finance_health_agent.py` | `feature/ligou-finance-health` |
-| 郭哥 | family：家庭授权 | `app/agents/family_agent.py`、`tests/test_family_agent.py` | `feature/guoge-family` |
-| 二狗 | subscription：订阅治理 | `app/agents/subscription_agent.py`、`tests/test_subscription_agent.py` | `feature/ergou-subscription` |
-| 二狗 | card：卡片管理 | `app/agents/card_agent.py`、`tests/test_card_agent.py` | `feature/ergou-card` |
+| 宫文馨（项目负责人） | payment：支付与交易；主 Agent、监督 Agent和全部公共平台 | `app/agents/payment_agent.py`、`app/transaction_agent.py`、对应测试；公共文件统一由负责人维护 | `feature/lead-payment`；公共能力另开 `feature/platform-<topic>` |
+| 董有轩（领域负责人） | antifraud：反诈风控 | `app/agents/antifraud_agent.py`、`tests/test_antifraud_agent.py` | `feature/dongyouxuan-antifraud` |
+| 李浩林（领域负责人） | finance_health：财务健康 | `app/agents/finance_health_agent.py`、`tests/test_finance_health_agent.py` | `feature/lihaolin-finance-health` |
+| 郭嘉乐（领域负责人） | family：家庭授权 | `app/agents/family_agent.py`、`tests/test_family_agent.py` | `feature/guojiale-family` |
+| 李苏润 | subscription：订阅治理 | `app/agents/subscription_agent.py`、`tests/test_subscription_agent.py` | `feature/lisurun-subscription` |
+| 李苏润 | card：卡片管理 | `app/agents/card_agent.py`、`tests/test_card_agent.py` | `feature/lisurun-card` |
 
-一个人可以维护两域，但二狗的两个域保留各自模块、注册函数、测试及 PR，不合并为一个 domain。表中中文称呼是用户确认的团队称呼，不是 GitHub 用户名；目标仓库URL已提供为https://github.com/gwenxin236-tech/bank-agent；四位成员GitHub账号和邀请/接收状态尚未提供。
+一个人可以维护两域，但李苏润的两个域保留各自模块、注册函数、测试及 PR，不合并为一个 domain。表中姓名为项目团队正式姓名，不能据此推断GitHub账号；目标仓库URL已提供为https://github.com/gwenxin236-tech/bank-agent；GitHub账号与真实姓名的对应关系以成员确认及仓库授权记录为准；前四域不再以成员交付为开发前置。职责变化不代表代码已完成；六域名称、注册和原DomainContext/Finding/Proposal接口均保留。
 
 成员是在已有实现上增量完善，不能直接用个人项目覆盖整个 `app/`。确需辅助模块、样例语料或额外测试文件时，在 PR 中列出路径与理由并由负责人确认，不把其他域和公共平台混入同一 PR。成员已有独立项目时，先提取纯分析逻辑适配本接口，不要求平台兼容四套运行框架。
 
@@ -27,10 +27,10 @@
 
 | 层 | 负责人 | 职责 | 不承担的职责 |
 |---|---|---|---|
-| 主 Agent | 你 | 接收请求、识别/澄清意图、准备授权范围内的事实、组织业务计划、把监督结果和工具回执呈现给用户 | 不把模型判断当权限；不伪造执行成功 |
-| 监督 Agent（Supervisor） | 你 | 按已审核路由调用领域模块，核对 Context、来源、事实、工具、参数与冲突，审核候选计划 | 不直接动账、不签发强认证凭据、不替代 PolicyEngine |
+| 主 Agent | 宫文馨 | 接收请求、识别/澄清意图、准备授权范围内的事实、组织业务计划、把监督结果和工具回执呈现给用户 | 不把模型判断当权限；不伪造执行成功 |
+| 监督 Agent（Supervisor） | 宫文馨 | 按已审核路由调用领域模块，核对 Context、来源、事实、工具、参数与冲突，审核候选计划 | 不直接动账、不签发强认证凭据、不替代 PolicyEngine |
 | 领域 Agent | 表中对应成员 | 根据绑定的只读快照输出 Finding 和 Proposal，说明缺失信息、风险及建议 | 不直接查询银行/数据库、不发通知、不改授权、不调用业务写工具 |
-| 安全执行平面 | 你 | PolicyEngine、确认、强认证、Tool Gateway、Adapter、幂等、DAG、审计、熔断及接管 | 不接受 Agent 自报的“已授权/已执行” |
+| 安全执行平面 | 宫文馨 | PolicyEngine、确认、强认证、Tool Gateway、Adapter、幂等、DAG、审计、熔断及接管 | 不接受 Agent 自报的“已授权/已执行” |
 
 当前主流程位于 `app/banking_agent.py:2359` 的 AgentRuntime，Planner 位于同文件 `:2166`；Supervisor 是独立类，初始化接入位于 `:2368`。本契约区分逻辑角色，不要求复制一个新的主 Agent 类。
 
@@ -122,7 +122,7 @@ DomainSnapshot的字段为domain/context_key/facts/evidence/status，status仅�
 
 成员可在既有事实基础上完善missing_fields、risk_signals、recommendations及已审核Proposal，但这些内容不是授权，也不能成为银行数值回执。需要新增可核验派生事实时，提交“字段名/类型/单位/来源/推导规则/未知语义/测试样例”的平台扩展申请，由负责人先扩展快照和监督校验，再发布兼容基线。
 
-风险、财务等如需更深入算法而当前快照数据不够，必须明确提出数据需求；不能为了“接入成功”仅把新结果塞进自由文本，也不能让Supervisor无条件信任成员输出。P03知识引用已作为独立只读知识工具结果发布，含资料/片段ID、源文件行号、版本、SHA256及配置证据；它不是银行业务事实，不进入现有Finding.facts/evidence快照。领域侧阅读契约尚未开放，成员不要直接读取知识文件、取得模型密钥或提前依赖未发布的扩展。
+风险、财务等如需更深入算法而当前快照数据不够，必须明确提出数据需求；不能为了“接入成功”仅把新结果纳入自由文本，也不能让Supervisor无条件信任成员输出。P03知识引用已作为独立只读知识工具结果发布，含资料/片段ID、源文件行号、版本、SHA256及配置证据；它不是银行业务事实，不进入现有Finding.facts/evidence快照。领域侧阅读契约尚未开放，成员不要直接读取知识文件、取得模型密钥或提前依赖未发布的扩展。
 
 ### 4.3 Proposal 当前白名单
 
@@ -145,12 +145,12 @@ DomainSnapshot的字段为domain/context_key/facts/evidence/status，status仅�
 
 | 成员/领域 | 必须验证的正常行为 | 必须验证的异常与边界 |
 |---|---|---|
-| 你/payment | 收款与金额澄清、六维预检、预算缺口解释、候选三步、工具事实回执 | 新收款人/未知卡状态不猜测；金额不静默修改；超时查原交易；不自动再转一次 |
-| 董哥/antifraud | 解释已有风险因子、话术/新收款人/频次信号，提出核对/人工建议 | 不把大额或亲属称呼当诈骗定论；不自行重算权限或冻结账户；缺失来源明确未知 |
-| 李狗/finance_health | 区分消费、现金流、可用/受限/处理中资金；说明预算缺口和coverage | 还款不重复算消费；退款和跨源关联遵守平台口径；预计收入不充当已到账余额 |
-| 郭哥/family | 区分actor/subject，解释守护关系、授权类型、额度、有效期和撤销状态 | 缺失/过期/撤销授权阻断建议；“我是家属”不产生权限；不可跨账户复用快照 |
-| 二狗/subscription | 区分历史交易、未来扣费授权、服务有效期、退款；缺ID只提供真实候选 | 未知退款不说到账；不可终止项不建议取消；不提前读取需黄色确认的数据 |
-| 二狗/card | 对已知卡和状态提出挂失/解挂及核验步骤 | 未知卡/状态先澄清；不重复建议挂失；本页隐藏不是挂失；不跳过红色强认证 |
+| 宫文馨/payment | 收款与金额澄清、六维预检、预算缺口解释、候选三步、工具事实回执 | 新收款人/未知卡状态不猜测；金额不静默修改；超时查原交易；不自动再转一次 |
+| 董有轩/antifraud | 解释已有风险因子、话术/新收款人/频次信号，提出核对/人工建议 | 不把大额或亲属称呼当诈骗定论；不自行重算权限或冻结账户；缺失来源明确未知 |
+| 李浩林/finance_health | 区分消费、现金流、可用/受限/处理中资金；说明预算缺口和coverage | 还款不重复算消费；退款和跨源关联遵守平台口径；预计收入不充当已到账余额 |
+| 郭嘉乐/family | 区分actor/subject，解释守护关系、授权类型、额度、有效期和撤销状态 | 缺失/过期/撤销授权阻断建议；“我是家属”不产生权限；不可跨账户复用快照 |
+| 李苏润/subscription | 区分历史交易、未来扣费授权、服务有效期、退款；缺ID只提供真实候选 | 未知退款不说到账；不可终止项不建议取消；不提前读取需黄色确认的数据 |
+| 李苏润/card | 对已知卡和状态提出挂失/解挂及核验步骤 | 未知卡/状态先澄清；不重复建议挂失；本页隐藏不是挂失；不跳过红色强认证 |
 
 成员如已做超出上述范围的功能，在PR交付说明中分列“可直接接入”“需要公共接口”“尚未实现”；负责人据此安排平台扩展，不直接丢弃已有成果，也不把未接主链的功能写成已交付。
 
@@ -239,13 +239,13 @@ macOS/Linux将PYTHONPATH分隔符改为冒号：`PYTHONPATH=app:tests BANK_AGENT
 
 负责人完整回归：`python scripts/browser_qa.py --full`，须准备可选Node/Playwright/浏览器工具，核对0跳过和ResourceWarning。普通unittest或CI里的unittest不能自动替代此验收。现有CI文件 `.github/workflows/ci.yml` 包含静态检查、unittest、preflight和镜像构建；尚无远端运行成功证据，完整浏览器/真实外部联调不是现有CI已覆盖项。
 
-## 9. 你先完成什么：平台先行阶段
+## 9. 负责人平台先行开发阶段
 
-按负责人本次意图，正式成员开发基线的发布顺序为：**你先补齐不依赖四位成员的公共平台 → 验收并发布GitHub基线 → 四位成员分支开发 → 你逐个集成 → 最终贯通和交付**。现有领域基础模块保留，可用于公共平台测试；成员不必先重做这六个模块才能启动平台开发。
+本节前半保留2026-10-23平台先行安排；当前后续任务以[四域开发与需求总账](四域开发与需求总账.md)为准。按当时负责人意图，正式成员开发基线的发布顺序为：**负责人补齐公共平台 → 验收并发布GitHub基线 → 成员按分支开发 → 负责人逐项集成 → 全链路验收和交付**。现有领域基础模块保留，可用于公共平台测试；成员不必先重做这六个模块才能启动平台开发。
 
 “不依赖成员”不等于“不依赖外部资源”。截至本次用户说明：没有银行开放平台/测试环境、IM/客服或认证供应方，只有SiliconFlow大模型API资源。接口、替身测试和故障测试可以先做；真实系统联调、生产身份系统验收不能据此完成，也不能把大模型API当银行/客服接口。
 
-| 建议顺序/编号 | 你独立负责的工作 | 复用基础 | 完成证据/外部条件 |
+| 建议顺序/编号 | 负责人独立负责的工作 | 复用基础 | 完成证据/外部条件 |
 |---|---|---|---|
 | P01 | 固定本契约、成员边界、基线版本和接入验证 | domain_agent_contract / registry / snapshots / Supervisor | 本契约、可运行示例和兼容检查；本批仅形成文档，不宣称新增平台功能完成 |
 | P02 | SiliconFlow统一模型适配、结构化输出、超时/错误/预算/隐私控制 | app/llm_adapter.py:28、:77 | 虚构输入的真实API专项记录＋离线替身测试；需可用模型ID和本机安全注入的密钥，不能只证明配置存在 |
@@ -336,51 +336,35 @@ SiliconFlow官方接口为兼容Chat Completions的请求，Base URL不包含末
 
 ## 11. GitHub协作：同一仓库、独立分支、负责人集成
 
-### 11.1 分支约定与真实状态
+### 11.1 当前发布基线与协作边界（2026-10-31更新）
 
-团队采用下述流程；这是本次确定的协作规则，实际创建/保护尚未执行。目前本地只有main，无远端配置，且有未提交与未跟踪成果；HEAD不是全部当前代码。发布前先逐文件核对范围与隐私，保留五个既有删除现状，不用恢复或重写历史来“清理基线”。
+- 当前本地工作目录仍有未提交成果，旧HEAD `f9d0cc2`不是全部项目。N01仅同步四份已审核发布修复；不提交、不推送、不恢复五个删除文件。
+- 独立发布目录已按逐项授权推送至 `release/competition-20261031`，验收提交为 `0c6608f4e136da4dd440410fad7b20ef90dc4ce4`。仓库是私有仓库，该release分支为当前默认分支；未创建或覆盖main/develop。
+- 托管CI：[41180706311](https://github.com/gwenxin236-tech/bank-agent/actions/runs/41180706311)四任务通过；Windows和Linux各767项核心、浏览器13项，独立用例780。默认标准库镜像禁网Mock通过不代表含模型三配置离线候选包通过。
+- 本次后续本地开发不包含新的Git提交/推送授权。旧快照及每次修复的发布许可仅适用于当时限定内容；后续发布须审查具体差异。
+- subscription/card的负责方保留各自模块和测试；需要GitHub协作时先取得实际访问权限，功能分支以当前已验收release为基线，PR目标为该release。分支保护、成员邀请及PR合并未找到成功证据。
 
-- `main`：已验收的稳定/竞赛交付版本。
-- `develop`：负责人逐个合并成员PR的集成分支；合入后立即运行集成检查，不等四个人全部交完才第一次联调。
-- `feature/<成员>-<领域>`：从已发布的develop基线创建，仅包含本域改进。负责人公共功能使用独立平台分支。
-- 成员是同仓库协作者：clone后在自己的电脑建功能分支并push到该仓库，PR目标是develop；不要求每人另开一个仓库。无写权限时可另行选fork流程，不把fork和branch混为一谈。
+依据：`data/verification/finalize-20261031/publication/publication-receipt.json`及`ci-status-preflight-fix.json`；源码交接入口 `.qa-tools/offline-releases/final-20261031-published-0c6608f/START_HERE.md`。这些本机记录和模型环境不随源码自动获得。
 
-负责人保留合并权；成员不直接push main/develop、不替别人批准自己的业务变更。GitHub分支保护和必需检查能否强制执行取决于仓库可见性、权限和套餐，不能假定已生效。默认建议成员PR至少1名其他人审查；负责人自己提交的平台PR也需其他指定成员审查，不能把“自己批准自己”当有效审查。根据实际支持配置，而不是简单关闭全部审查。
-
-依据：[GitHub分支保护](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)、[branch与fork区别](https://docs.github.com/en/pull-requests/reference/forks)。这两页仅支持协作机制，不证明本项目仓库/权限已配置。
-
-### 11.2 成员操作示例（未来执行，本批不运行Git写操作）
-
-前置：负责人已给仓库实际地址、权限、完整开发基线和指定基线commit；成员在新的干净目录clone。以下占位符必须换成实际值，不能用本地f9d0cc2冒充未来发布基线。
+### 11.2 后两域负责方操作示例（说明，不是助手执行授权）
 
 ```bash
-git clone <负责人提供的仓库URL>
-cd <实际克隆目录>
-git fetch origin
-git switch --track origin/develop
-git switch -c feature/dongge-antifraud
-# 阅读契约，在已有antifraud模块和自己的测试上增量修改，运行第8节检查。
-git status --short
-git diff -- app/agents/antifraud_agent.py tests/test_antifraud_agent.py
-git add -- app/agents/antifraud_agent.py tests/test_antifraud_agent.py
-git commit -m "feat(antifraud): improve reviewed domain analysis"
-git push -u origin feature/dongge-antifraud
-# 在GitHub创建PR：base=develop，compare=feature/dongge-antifraud。
+git clone --branch release/competition-20261031 https://github.com/gwenxin236-tech/bank-agent.git
+cd bank-agent
+git switch -c feature/lisurun-subscription
+# 阅读本契约，仅增量修改subscription模块和测试；先验收，再由成员自行提交和推送。
+# GitHub PR: base=release/competition-20261031; compare=feature/lisurun-subscription。
 ```
 
-已存在本地develop时用 `git switch develop`，在工作区干净且分支无本地未推提交时 `git pull --ff-only`；不要重复执行 `--track`。其他成员替换第1节分支和路径；二狗分别提交两个域。上面代码块是成员操作说明，不构成助手现在执行commit/push的授权。
+card另建独立功能分支；收到权限前不得把clone成功当作已有协作权限。负责人公共平台和前四域在保留现有成果的本地副本中逐批开发，不覆盖整个目录、不强推。
 
-同步其他域最新改动：先提交自己已完成的本域改动，再在自己的功能分支 `git fetch origin`、`git merge origin/develop`；遇到冲突停下查看，公共契约冲突交负责人协调。不要以删文件、强推、reset --hard或覆盖整个目录解决。个人分支提交不等于测试已通过或负责人已验收。
+### 11.3 逐域集成与最终交付
 
-### 11.3 负责人本机贯通
-
-1. 发布前记录完整基线commit与源码哈希，确保六域、契约、配置、必要语料和说明都在经审查的发布范围，排除密钥、日常DB及过程目录。
-2. 每个PR先审diff/归属/接口/来源/依赖，再在干净集成工作区检出测试；不覆盖负责人当前有未提交成果的工作区。
-3. 本域测试＋契约/注册器＋Supervisor/主链测试通过后合入develop；每合一域做针对性集成，关键节点跑完整浏览器/恢复回归。
-4. 全员交付后进行组合场景、故障、认证、动态DAG和恢复贯通，重建最终镜像及离线包；成员单域通过不能替代此阶段。
-5. 功能冻结后同步PPT、视频、技术文档、安全自评、部署与测试证据，审查后把已验收develop合入main并按最终授权发布/上传。
-
-GitHub上传源码并不附带Docker引擎或全部外部环境；离线包和真实外部服务配置按各自交付物管理，不能承诺任何电脑下载源码就能离线使用真实银行或在线模型。
+1. 每批记录基础版本、改动范围、需求编号和测试结果；保留可回退的逐文件副本，不把旧HEAD当全部成果。
+2. 每完成一域立即通过本域、契约、注册器、Supervisor和主链测试，不等四域全部做完才首次联调。
+3. 后两域的外部交付先审查文件归属、接口、事实来源和依赖，再做同样验收；保留其既有实现及测试。
+4. 功能变更后重新验收组合场景、异常、认证、DAG、审计和恢复；更新文档与材料，再按单独批准的发布范围更新GitHub和离线包。
+5. 源码ZIP不包含模型、镜像、Docker引擎或真实服务配置；当前新完整离线候选包仍待引擎恢复后的功能复验及物理异机验收。
 
 ## 12. 变更、交付状态与本批范围
 
@@ -499,7 +483,7 @@ GitHub上传源码并不附带Docker引擎或全部外部环境；离线包和�
 - 负载为有界闭环，不模拟固定外部到达率，也不宣称生产容量。1／2／4／8并发各10秒、每档最多200个逻辑操作；触及操作预算会提前结束，报告真实时长和budget_exhausted，不能写成完整10秒。持续负载4并发、目标2逻辑操作/秒、300秒、上限1000操作，等待在途请求结束计入实测时长。
 - 逻辑工作比例固定6成余额查询、3成完整1分钱转账、1成本地客服领取／留言／结单。转账始终先计划、显式确认，再检查旧确认拒绝；查询和客服不能扣款。并发重复确认另用10笔／80次请求检查单次执行。逻辑操作、HTTP请求及拒绝数量分别报告，不把1次转账中的多个HTTP请求当作多笔转账吞吐。
 
-#### **9.11.2 统计和验收口径**
+#### **9.11.2 统计和验统一集成径**
 
 | 项目 | 冻结目标／解释 |
 | --- | --- |
@@ -602,6 +586,10 @@ GitHub上传源码并不附带Docker引擎或全部外部环境；离线包和�
 - 当前基线仍是工作区及确定性SOURCE_MANIFEST，不是旧HEAD。RAG段落修订新增5项测试，受控DAG真实模型补验新增1项；最终完整回归与三配置镜像状态以docs/assets/最终交付验收.json为准，不覆盖P11历史774/761。
 - RAG同120题现为关键词113、混合116、独立重排120；原问题/标签和阈值不变、无新增退步，真人PENDING。旧资料在eval/knowledge_p03_v2.json可重现117/120；默认eval/rag_eval_v3.json绑定新资料SHA。
 - 模型DAG仅公开目录，2次989tokens，第一次非法安全拒绝、第二次原图通过并经新卡确认在临时Mock恰扣100分。review及原权限链未放宽；不是任意跨业务、生产并行或真人点击验收。
-- 成员仍沿第1节各自feature分支、仅改本人域与测试、提PR、不自行合并公共平台。没有成员PR交付证据，不将现有文件当成员已完成。主Agent、监督Agent和支付域仍由负责人维护，DomainContext/Finding/Proposal ABI未变。
-- 仓库地址已给定；本机2026-10-31只读ls-remote返回Repository not found，可能涉及访问认证或地址/可见性，尚不能判定。未commit/push、远端CI及邀请没有成功证据，CODEOWNERS只是路径归属，不代表技术分支保护已生效。
+- 当前分工以第1节v1.1为准：执行助手负责平台和前四域，后两域继续由原负责方交付。不把已有文件当独立成员PR已交付；DomainContext/Finding/Proposal ABI未变。
+- 此前Repository not found是历史登录阶段状态；后续已授权独立发布与远端CI成功，详见第11节。原工作区未提交；成员邀请和分支保护仍无通过证据，CODEOWNERS不等于技术保护。
 - 接收方运行有两种文件：源码ZIP供开发；包含模型/依赖/镜像的独立离线包供已有Docker Linux引擎的电脑运行。当前目标及待办见docs/最终推进清单.md，不能只git clone就声称获得全部离线AI环境。
+
+### **9.14 N01/N02四域接手与需求追踪（2026-10-31）**
+
+当前执行清单为[四域开发与需求总账](四域开发与需求总账.md)。研究报告是设计输入，PM-2交付文字不等于源码已集成；其8类关键词、4类共现规则、历史49项测试和develop流程需分别核验。当前所列signal_collector/test_antifraud路径未找到；不得通过忽略SQLite清理异常获得通过。所有新增能力仍沿平台权限、确认、认证、审计及副作用执行链，每域验收后立即集成。真实银行、官方IM/客服、生产认证及真人/异机验收保留各自前置条件。

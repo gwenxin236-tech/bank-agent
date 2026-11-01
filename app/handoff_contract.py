@@ -120,6 +120,11 @@ class HandoffCard:
                          "subscription_id", "member", "allowance_cents", "card_number", "account_number")
         verified = {key: entities[key] for key in verified_keys if key in entities and entities[key] is not None}
         verified["intent"] = source.get("intent", "")
+        preflight=source.get('preflight') or {}
+        fact_keys={'amount_cents','available_cents','current_cents','limit_cents','projected_cents','verified','directory_match','security_buffer_cents','confirmed_expenses_cents','disposable_cents','shortfall_cents'}
+        facts=[{'check':key,'status':value.get('status','unknown'),'evidence':{k:v for k,v in value.get('evidence',{}).items() if k in fact_keys and type(v) in (int,bool,type(None))},'source':'preflight.py:build_payment_preflight#'+key} for key,value in preflight.get('checks',{}).items() if isinstance(value,Mapping)]
+        if facts:verified['payment_preflight']={'observed_at':preflight.get('generated_at',''),'facts':facts,'meaning':'historical_snapshot_recheck_before_action'}
+
         steps = _steps(source)
         pending = list(pending_items or [])
         pending.extend(_pending_step_text(steps))

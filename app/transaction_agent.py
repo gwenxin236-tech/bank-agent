@@ -49,6 +49,44 @@ class PaymentSnapshot:
         return cls(key, raw)
 
 
+# Recovery advice is derived only from the platform preflight, never an approval.
+_RECOVERY_MESSAGES = {
+    'available_funds': ('可用资金不足，调整预算不能增加账户余额。', '可用资金尚未核实，请先重新查询。'),
+    'daily_limit': ('日累计额度不满足，请核对银行允许的办理路径或联系人工，不拆单规避。', '日累计额度尚未核实，请先重新查询。'),
+    'beneficiary': ('收款账户尚未核验，请补齐并核对收款资料。', '收款对象尚未明确，请先补齐资料。'),
+    'card_status': ('付款卡片状态不满足，请先核对限制和允许的处理路径。', '付款卡片状态未知，请先核实状态。'),
+    'budget': ('预算缺口尚未解决，需要结合其他办理条件核对。', '预算资料尚未核实，不用预计收入代替可用资金。'),
+}
+
+
+def payment_recovery(report):
+    """Describe blockers and safe next choices; this never invokes a bank tool."""
+    checks = report['checks']
+    if set(checks) != _CHECKS or any(c.get('status') not in {'satisfied','missing','unknown'} for c in checks.values()):
+        raise ValueError('Recovery requires a complete platform preflight')
+    blockers = [{'check':key, 'status':checks[key]['status'],
+                 'message':messages[checks[key]['status'] == 'unknown']}
+                for key,messages in _RECOVERY_MESSAGES.items() if checks[key]['status'] != 'satisfied']
+    fields = []
+    amount = report.get('amount_cents')
+    if type(amount) is not int or amount <= 0: fields.append('amount_cents')
+    if not report.get('beneficiary'): fields.append('beneficiary')
+    status, options = 'ready', []
+    if fields:
+        status, options = 'needs_clarification', [{'action':'clarify','fields':fields}]
+    elif any(checks[k]['status'] == 'unknown' for k in ('available_funds','daily_limit','card_status','budget')):
+        status, options = 'needs_review', [{'action':'recheck_facts'},{'action':'human_handoff'}]
+    elif any(checks[k]['status'] == 'missing' for k in ('daily_limit','card_status')):
+        status, options = 'needs_review', [{'action':'recheck_facts'},{'action':'human_handoff'}]
+    elif checks['beneficiary']['status'] != 'satisfied':
+        status, options = 'needs_clarification', [{'action':'clarify','fields':['beneficiary_account']}]
+    elif checks['budget']['status'] == 'missing' or checks['available_funds']['status'] == 'missing':
+        actions = ['adjust_amount','defer','human_handoff'] if checks['available_funds']['status'] == 'missing' else ['adjust_amount','adjust_budget','defer','human_handoff']
+        status, options = 'needs_user_choice', [{'action':action} for action in actions]
+    return {'mode':'REVIEW_ONLY','status':status,'blockers':blockers,'user_options':options,
+            'notice':'请先核对以上事项；建议本身不会办理业务，继续办理仍需确认和必要认证。'}
+
+
 class TransactionAgent:
     domain = 'payment'
 
@@ -90,14 +128,9 @@ class TransactionAgent:
         required = checks['authentication']['evidence'].get('required')
         confirmations = ['explicit_user_confirmation'] if required in {'confirmation', 'strong_auth'} else []
         authentication = ['strong_auth'] if required == 'strong_auth' else []
-        options, steps = [], []
-        if checks['budget']['status'] == 'missing':
-            options = [{'action': name} for name in ('adjust_amount', 'adjust_budget', 'defer', 'human_handoff')]
-        elif finding.missing_fields:
-            options = [{'action': 'clarify', 'fields': list(finding.missing_fields)}]
-        elif any(checks[k]['status'] != 'satisfied' for k in _CHECKS - {'authentication'}):
-            options = [{'action': 'recheck_facts'}, {'action': 'human_handoff'}]
-        else:
+        recovery = payment_recovery(self.snapshot.report)
+        options, steps = recovery['user_options'], []
+        if recovery['status'] == 'ready':
             amount, name = ctx.entities['amount_cents'], ctx.entities['beneficiary']
             steps = [{'tool': 'resolve_beneficiary', 'params': {'beneficiary': name}},
                      {'tool': 'check_transfer_constraints', 'params': {'amount_cents': amount}},

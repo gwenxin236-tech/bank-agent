@@ -26,10 +26,10 @@ const operatorToken=randomBytes(24).toString('hex');
 const bootstrap=`import sys,threading,os\nsys.path.insert(0,os.path.join(os.getcwd(),'app'))\nimport banking_agent as ba\nsrv=ba.ThreadingHTTPServer(('127.0.0.1',0),ba.Handler)\nt=threading.Thread(target=srv.serve_forever,daemon=True);t.start()\nprint('PORT='+str(srv.server_port),flush=True)\nsys.stdin.readline()\nsrv.shutdown();srv.server_close();t.join()\nba.runtime.recovery_scheduler.stop();ba.runtime.bank.close();ba.runtime.audit.db.close()\n`;
 // Initialize the approved native DLLs on the main thread before its stdin wait.
 // Model inference and newly asked questions still run in the ordinary HTTP path.
-const demoBootstrap=(smoke?'import faulthandler\nfaulthandler.dump_traceback_later(25,repeat=True)\n':'')+bootstrap.replace('import banking_agent as ba\n','import numpy,onnxruntime,tokenizers,cv2,rapidocr\nimport banking_agent as ba\n').replace("srv=ba.ThreadingHTTPServer", "ba.runtime.family.demo_sessions[os.environ['RECORDING_OPERATOR_TOKEN']]={'user_id':'operator','device_id':'recording-operator','role':'admin'}\nsrv=ba.ThreadingHTTPServer");
+const demoBootstrap=bootstrap.replace('import banking_agent as ba\n','import numpy,onnxruntime,tokenizers,cv2,rapidocr\nimport banking_agent as ba\n').replace("srv=ba.ThreadingHTTPServer", "ba.runtime.family.demo_sessions[os.environ['RECORDING_OPERATOR_TOKEN']]={'user_id':'operator','device_id':'recording-operator','role':'admin'}\nsrv=ba.ThreadingHTTPServer");
 const safeEnv={...process.env};for(const name of Object.keys(safeEnv))if(name.endsWith('_API_KEY')||name.endsWith('_ACCESS_TOKEN'))delete safeEnv[name];
 const server=spawn(python,['-u','-c',demoBootstrap],{cwd:root,env:{...safeEnv,
- BANK_AGENT_DB_PATH:path.join(db,'demo.sqlite3'),BANK_AGENT_OFFLINE:'1',VOICE_ENABLED:'0',
+ BANK_AGENT_DB_PATH:path.join(db,'demo.sqlite3'),BANK_AGENT_OFFLINE:'1',BANK_SERVICE_MODE:'mock',APP_ENV:'demo',VOICE_ENABLED:'0',
  BANK_AGENT_DEMO_ADMIN_TOKEN:'',RECORDING_OPERATOR_TOKEN:operatorToken,PYTHONDONTWRITEBYTECODE:'1',PYTHONIOENCODING:'utf-8',
  PYTHONPATH:[path.join(root,'.qa-tools/local-ocr/windows-site'),path.join(root,'app')].join(path.delimiter),
  RAG_EMBEDDING_BACKEND:'local',RAG_LOCAL_MODEL_DIR:path.join(root,'models/rag'),RAG_USE_MODEL:'0',RAG_USE_RERANKER:'1',RAG_RERANKER_DIR:path.join(root,'models/reranker'),
@@ -84,7 +84,7 @@ try{
   await page.waitForTimeout(500);return data;
  };
  const scene=(name)=>{report.scenes.push({name,start_seconds:(Date.now()-start)/1000});console.log('SCENE:',name);};
- scene('开场');await caption('演示范围','自然语言办理模拟银行业务；规则默认离线，平台决定权限。画面为真实本地界面，字幕为录制说明。');await shot('01-home');await hold(12);
+ scene('开场');await caption('演示范围','自然语言办理模拟银行业务；规则默认离线，平台决定权限。画面为本地系统实际操作记录，字幕说明演示步骤。');await shot('01-home');await hold(12);
  const initial=(await state()).balance.available_cents;
  scene('绿色查询');await caption('绿色 · 自动查询','查询余额可自动执行，显示来自 Mock 工具的账户事实；本例不连接真实银行。');
  const green=await send('帮我查一下账户余额');check('green_query',green.result.status==='SUCCESS');await shot('02-green');await hold(18);
@@ -98,7 +98,7 @@ try{
  scene('订阅查询');await caption('订阅查询 · 仍需黄色确认','订阅查询虽然只读，仍按赛题权限表先确认；查询不产生扣款，也不静默取消服务。');
  const sub=await send('查询自动续费订阅');check('subscription_yellow',sub.plan.risk_level==='yellow'&&!sub.result);await hold(9);
  check('subscription_result',(await confirm()).result.status==='SUCCESS');check('subscription_no_debit',(await state()).balance.available_cents===initial-20000);await shot('05-subscription');await hold(12);
- scene('红色演示认证');await caption('红色 · 认证与确认分离','转账2000元触发红色。先发起挑战，输入固定演示验证码123456；它不是真实短信或人脸认证。');
+ scene('红色演示认证');await caption('红色 · 认证与确认分离','转账2000元触发红色。先发起挑战，输入固定演示验证码123456；本示例不使用真实短信或人脸认证。');
  const red=await send('给妈妈转2000元');check('red',red.plan.risk_level==='red');await hold(8);
  const challenge=await confirm();check('needs_auth',challenge.needs_auth);await page.locator('#authModal').waitFor({state:'visible'});await shot('06-auth');await hold(10);
  await page.locator('#otpInput').fill('123456');
@@ -126,10 +126,10 @@ try{
  check('ocr_only_draft_no_debit',(await state()).balance.available_cents===initial-220000);await page.locator('#messageInput').fill('');
  scene('受控动态DAG');await caption('动态任务安排 · 采纳不等于执行','原业务步骤必须保留；先审核拓扑、再撤旧卡并重新确认。演示仅采纳后取消，不产生新的扣款。');
  const dynamic=await send('给妈妈转1元');const oldToken=dynamic.plan_view.action_token;
- await page.locator('#dynamicDagPanel summary').click();await page.locator('#dynamicDagPropose').click();await page.locator('#dynamicDagGraph svg').waitFor();
+ await page.locator('#dynamicDagPanel summary').click();await page.locator('#crossDomainDagPropose').click();await page.locator('#dynamicDagGraph svg').waitFor();
  await shot('13-dag');await hold(13);await page.locator('#dynamicDagAdopt').click();await page.waitForFunction(t=>currentPlan.action_token!==t,oldToken);
  check('dag_adopt_no_debit',(await state()).balance.available_cents===initial-220000);const cancelled=page.waitForResponse(r=>r.url()===base+'/api/cancel');await page.locator('#cancelBtn').click();await cancelled;
- scene('自建双端交流');await caption('本地接管 · 自动双端测试','用户和自建坐席可以双向收发；本片由脚本操作，不代替真人双端验收，也不是银行官方客服。');
+ scene('自建双端交流');await caption('本地接管 · 自动双端测试','用户和自建坐席可以双向收发；本段为自动化双端演示，真人双端验收和银行官方客服接入须另行验证。');
  await page.locator('#customerServiceBtn').click();await page.waitForFunction(()=>document.querySelector('#customerServiceStatus').dataset.caseId);
  await page.locator('#handoffStatusRefresh').click();await page.waitForTimeout(700);
  check('local_case',Boolean(await page.locator('#customerServiceStatus').getAttribute('data-case-id')));
@@ -141,7 +141,19 @@ try{
  await page.locator('#liveSupportRefresh').click();await page.locator('#liveSupportMessages').getByText('已收到核对问题，请以原工具回执为准，不重新发起转账。',{exact:true}).waitFor();
  check('actual_two_context_message_exchange',true);check('support_no_bank_effect',(await state()).balance.available_cents===initial-220000);
  await op.screenshot({path:path.join(work,'14-support-operator.png'),fullPage:true});await shot('09-handoff');await hold(17);await operatorContext.close();operatorContext=null;
- scene('结尾');await caption('当前交付边界','本地RAG、重排、OCR、动态DAG和自建消息已演示；Fineract与密码＋TOTP另有验收。真人、异机和生产边界仍保留。');
+ scene('支付受阻与交接');await caption('A · 原支付任务与责任','金额超过当前日限额时保留原任务；人工接收不代表付款完成，不创建第二笔转账。');
+ const blocked=await send('给妈妈转120000元');check('payment_preflight_blocked',blocked.blocked===true);check('blocked_payment_no_debit',(await state()).balance.available_cents===initial-220000);
+ await page.evaluate(()=>refreshBusinessTasks());await page.locator('[data-business-task="'+blocked.plan.plan_id+'"]').click();await page.locator('#paymentTaskHandoff').click();await shot('17-payment-recovery');await hold(13);
+ scene('交易异议跟进');await caption('B · 银行事实与用户主张分离','选择本人的交易并记录异议；这里只有本地工单，正式银行案件号、保护措施和退款分别待核实。');
+ await page.locator('#serviceTasksPanel').scrollIntoViewIfNeeded();await page.locator('#serviceTransaction').selectOption({index:1});
+ const disputeResponse=page.waitForResponse(r=>r.url().endsWith('/api/v1/service-tasks/dispute'));await page.locator('#openDisputeBtn').click();const dispute=(await(await disputeResponse).json()).service_task;check('dispute_no_official_case',dispute.official_case_id===null);
+ await page.locator('#serviceHandoffBtn').click();await page.locator('#serviceTaskDetail').getByText('待人工领取',{exact:false}).waitFor();await page.locator('#serviceTaskDetail').scrollIntoViewIfNeeded();await shot('15-dispute');await hold(15);
+ scene('期限资金准备');await caption('C · 期限、保留额与不借款','目标30万元并至少保留1万元。工具核对当前资金并显示缺口；预计到账不当可用资金，不自动借款或赎回。');
+ await page.locator('#serviceFundingAmount').fill('300000');await page.locator('#serviceFundingReserve').fill('10000');await page.locator('#serviceFundingDeadline').fill('2026-11-05T18:00');
+ const fundingResponse=page.waitForResponse(r=>r.url().endsWith('/api/v1/service-tasks/funding'));await page.locator('#openFundingBtn').click();const funding=(await(await fundingResponse).json()).service_task;check('funding_constraints',funding.constraints.no_borrow&&funding.goal.target_cents===30000000);
+ await page.locator('#serviceTaskDetail').getByText(funding.task_id,{exact:false}).waitFor();await page.locator('#serviceRecheckBtn').click();await page.locator('#serviceTaskDetail').getByText('不会自动办理付款',{exact:false}).waitFor();await page.locator('#serviceTaskDetail').scrollIntoViewIfNeeded();await shot('16-funding');await hold(15);
+ check('service_followups_no_debit',(await state()).balance.available_cents===initial-220000);
+ scene('结尾');await caption('当前交付边界','支付恢复、异议跟进、资金准备与本地资料已演示。Docker损坏，新镜像待构建；真人、异机、正式银行受理仍待验。');
  await page.locator('.workspace').scrollIntoViewIfNeeded();await shot('10-summary');await hold(15);
  check('no_external_browser_requests',external.length===0);check('no_browser_errors',report.errors.length===0);
  report.elapsed_seconds=(Date.now()-start)/1000;
@@ -162,6 +174,7 @@ finally{
  if(context)await context.close().catch(()=>{});if(browser)await browser.close().catch(()=>{});
  server.stdin.end('\n');await Promise.race([serverExit,new Promise(r=>setTimeout(r,10000))]);
  if(server.exitCode===null)server.kill();
+ report.server_exit_code=server.exitCode;
  report.original_database_unchanged=before===await fingerprint();
  if(!report.original_database_unchanged)report.status='FAIL';
  await fs.writeFile(path.join(work,'server.log'),logs);

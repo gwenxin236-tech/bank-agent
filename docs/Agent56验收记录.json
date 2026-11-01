@@ -190,7 +190,7 @@
   "platform": "win32",
   "cloud_calls": 0,
   "remote_ci_execution": false,
-  "member": "李苏润（二狗）",
+  "member": "李苏润",
   "domains": [
     "subscription",
     "card"
@@ -217,5 +217,7 @@
     "real_bank_integration": "not verified",
     "target_user_comprehension": "manual acceptance pending",
     "scope": "local demo and automated tests; not production certification"
-  }
+  },
+  "record_scope": "Historical member handoff at81ea8acd; old counts/hashes are not current integration acceptance",
+  "current_verification": "docs/PR1集成与验收.md; current965tests verified separately"
 }

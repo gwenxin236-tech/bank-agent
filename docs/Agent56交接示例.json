@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "fixture_only": true,
-  "member": "李苏润（二狗）",
+  "member": "李苏润",
   "baseline_commit": "0c6608f",
   "scope": "只读领域接口示例；无银行执行凭据或真实客户数据",
   "cases": [
@@ -846,5 +846,7 @@
       },
       "supervisor_status": "ready"
     }
-  ]
+  ],
+  "record_scope": "Historical member handoff at81ea8acd; old counts/hashes are not current integration acceptance",
+  "current_verification": "docs/PR1集成与验收.md; current965tests verified separately"
 }

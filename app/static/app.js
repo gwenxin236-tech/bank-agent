@@ -15,6 +15,7 @@ async function loadIdentity(){
     const logout=document.createElement('button');logout.type='button';logout.textContent='退出登录';logout.id='identityLogout';
     logout.addEventListener('click',async()=>{try{const r=await fetch('/api/v1/identity/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});if(r.ok)location.assign('/identity/login');else showToast('退出结果未确认，请重试');}catch(_){showToast('退出结果未确认，请重试');}});
     bar.append(label,logout);document.body.prepend(bar);$('#demoOtpHint').textContent='请使用身份验证器中下一枚未使用的动态码。';
+    await loadFamilyPermissions();
   }catch(_){/* The server still enforces identity when metadata cannot be loaded. */}
 }
 // Separate each page's unfinished draft; no dialogue is stored in the browser.
@@ -256,6 +257,22 @@ function renderReceipt(receipt) {
   return `<section class="receipt-list" aria-label="逐项办理回执"><h4>逐项办理回执</h4><ul>${itemHtml||'<li>暂无可展示的步骤</li>'}</ul>${compensationHtml}</section>`;
 }
 
+function renderPaymentRecovery(recovery) {
+  if (!recovery || recovery.status==='ready' || !Array.isArray(recovery.blockers)) return '';
+  const labels={recheck_facts:'重新核对资料',human_handoff:'联系人工核对',clarify:'补齐并核对资料',
+    adjust_amount:'明确新的金额后重新确认',adjust_budget:'核对并调整预算安排',defer:'暂缓办理'};
+  const blockers=recovery.blockers.map(x=>`<li>${escapeHtml(x.message||'请核对办理资料')}</li>`).join('');
+  const choices=(recovery.user_options||[]).filter(x=>labels[x.action]).map(x=>`<li>${escapeHtml(labels[x.action])}</li>`).join('');
+  return `<section id="paymentRecovery" aria-label="支付待核对事项"><b>支付待核对事项</b><ul>${blockers}</ul>${choices?`<p>处理建议：</p><ul>${choices}</ul>`:''}<p>${escapeHtml(recovery.notice||'继续办理前请重新核对。')}</p></section>`;
+}
+
+function renderPaymentEffect(summary) {
+  if(!summary?.scope)return '';
+  const expires=new Date(summary.expires_at);const expiry=Number.isNaN(expires.getTime())?'请重新核对':expires.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});
+  const constraints=summary.constraints||{};const reserve=Number.isInteger(constraints.reserve_cents)?`<p>至少保留：${escapeHtml(money(constraints.reserve_cents))}；平台安全底线仍适用。</p>`:'';const deadline=constraints.deadline?`<p>最晚提交（北京时间）：${escapeHtml(new Date(constraints.deadline).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}))}；不代表到账承诺。</p>`:'';
+  return `<section id="paymentEffectScope" aria-label="本次动作范围"><b>本次动作范围</b><p>确认有效至（北京时间）：${escapeHtml(expiry)}</p><p>${escapeHtml(summary.scope)}：${escapeHtml(summary.duration)}</p><p>${escapeHtml(summary.reversal)}</p><p>${escapeHtml(summary.notice)}</p>${reserve}${deadline}</section>`;
+}
+
 function renderPlan(planView, resultView=null) {
   if (!planView) return;
   currentPlan=planView; currentResultView=resultView;
@@ -273,7 +290,7 @@ function renderPlan(planView, resultView=null) {
   const reason = /^既有权限规则[：:]\s*(green|yellow|red)$/.test(planView.risk_reason || '')
     ? (planView.requires_strong_auth ? '请核对办理内容，并完成身份验证。' : planView.requires_confirmation ? '请核对办理内容，确认后继续。' : '本次仅查询，不会改变账户状态。')
     : planView.risk_reason || friendlyReason(planView.risk_level);
-  panel.innerHTML=`<div class="plan-title"><span>${escapeHtml(elderMode?'这次要做的事':'本次操作计划')}</span><span class="risk ${risk.className}" role="status" aria-label="${escapeHtml(risk.aria)}"><span class="risk-icon" aria-hidden="true">${risk.icon}</span><span>${escapeHtml(risk.text)}</span></span></div><div class="plan-summary">${escapeHtml(planView.plain_summary || planView.summary || '')}</div><div class="risk-reason">${escapeHtml(reason)}</div>${details?`<ul class="plan-details">${details}</ul>`:''}${elderMode?`<details class="technical-steps"><summary>查看办理步骤</summary><ol class="steps">${steps}</ol></details>`:`<ol class="steps">${steps}</ol>`}${planView.requires_confirmation&&!resultView?`<div class="confirmation-hint">${escapeHtml(planView.confirmation_hint||'请核对后再继续。')}</div>`:''}${actions}${planView.awaiting_details?'<button class="details-action" id="transferDetailsBtn">补充转账信息</button>':''}${resultHtml}`;
+  panel.innerHTML=`<div class="plan-title"><span>${escapeHtml(elderMode?'这次要做的事':'本次操作计划')}</span><span class="risk ${risk.className}" role="status" aria-label="${escapeHtml(risk.aria)}"><span class="risk-icon" aria-hidden="true">${risk.icon}</span><span>${escapeHtml(risk.text)}</span></span></div><div class="plan-summary">${escapeHtml(planView.plain_summary || planView.summary || '')}</div><div class="risk-reason">${escapeHtml(reason)}</div>${details?`<ul class="plan-details">${details}</ul>`:''}${renderPaymentRecovery(planView.payment_recovery)}${renderPaymentEffect(planView.effect_summary)}${renderDomainReviews(planView.domain_reviews)}${renderSourceMaterials(planView.source_materials)}${elderMode?`<details class="technical-steps"><summary>查看办理步骤</summary><ol class="steps">${steps}</ol></details>`:`<ol class="steps">${steps}</ol>`}${planView.requires_confirmation&&!resultView?`<div class="confirmation-hint">${escapeHtml(planView.confirmation_hint||'请核对后再继续。')}</div>`:''}${actions}${planView.awaiting_details?'<button class="details-action" id="transferDetailsBtn">补充转账信息</button>':''}${resultHtml}`;
   announceA11y(`${phaseLabel}。${resultView?.user_message || planView.plain_summary || planView.summary || ''}`, false);
   $('#transferDetailsBtn')?.addEventListener('click',()=>openTransferDialog(transferDraft));
   $('#confirmBtn')?.addEventListener('click',confirmPlan); $('#cancelBtn')?.addEventListener('click',cancelPlan);
@@ -336,6 +353,9 @@ function renderDynamicTask(planView,resultView){
   if(planView.requires_confirmation && !resultView)button('dynamicDagPropose','生成任务安排',async()=>{
     if(busy)return;setBusy(true);try{const d=await postAgent('/api/dag/propose',{plan_id:planView.plan_id});if(!d.ok)throw Error(d.message||'暂不能编排');dynamicTaskViews.set(planView.plan_id,{proposal:d.proposal,nodes:d.nodes});if(dynamicTaskViews.size>64)dynamicTaskViews.delete(dynamicTaskViews.keys().next().value);renderCurrentDisplay();}catch(e){feedback.textContent=e.message;}finally{setBusy(false);}
   });
+  if(planView.requires_confirmation && !resultView)button('crossDomainDagPropose','生成财务核查＋支付安排',async()=>{
+    if(busy)return;setBusy(true);try{const d=await postAgent('/api/dag/propose',{plan_id:planView.plan_id,mode:'cross_domain'});if(!d.ok)throw Error(d.message||'本账户或后端暂不支持跨域资金核查');dynamicTaskViews.set(planView.plan_id,{proposal:d.proposal,nodes:d.nodes});renderCurrentDisplay();}catch(e){feedback.textContent=e.message;}finally{setBusy(false);}
+  });
   if(view){const picture=document.createElement('div');picture.id='dynamicDagGraph';drawDynamicGraph(picture,view.nodes||[]);area.append(picture);}
   if(view?.proposal && planView.requires_confirmation && !resultView)button('dynamicDagAdopt','采纳安排，再核对新确认卡',async()=>{
     if(busy)return;setBusy(true);try{const d=await postAgent('/api/dag/adopt',{plan_id:planView.plan_id,action_token:planView.action_token,proposal:view.proposal});if(!d.ok)throw Error(d.message||'安排未通过检查');dynamicTaskViews.set(planView.plan_id,{nodes:d.dynamic_graph,dag_id:d.dag_id,status:'waiting_human'});receiveAgentResponse(d);}catch(e){feedback.textContent=e.message;}finally{setBusy(false);}
@@ -378,6 +398,7 @@ function renderCurrentDisplay() {
   renderFraudWarning();
 }
 function receiveAgentResponse(data, updatePlan=true, speak=true, allowDialogs=true) {
+  if(data.business_task)refreshBusinessTasks();
   renderHandoffCard(data.handoff_card || data.presentation?.standard?.handoff_card || null);
   const standard = data.presentation?.standard || data;
   const plain = data.presentation?.plain || data;
@@ -972,3 +993,164 @@ $('#ocrReview').addEventListener('click',async()=>{
     announceA11y('已填写草稿，尚未办理。请核对后自行发送。',false);
   }catch(e){$('#ocrStatus').textContent=`未填写草稿：${e.message}`;updateOcrButtons();}
 });
+// N03: durable read-only task history. Loading a task never restores an action token.
+const businessTaskStatus={waiting_confirmation:'等待本人确认',blocked:'需要核对',needs_clarification:'等待补齐资料',
+  processing:'银行确认中',unknown:'结果待核验',recovery_required:'需要人工核对',succeeded:'已核实完成',failed:'未完成',
+  reversed:'已确认冲正',paused:'已暂停',cancelled:'已取消',deferred:'已暂缓保护',expired:'确认已过期',handoff:'人工处理中'};
+function styleBusinessTaskButton(button){
+  button.className='business-task-button';Object.assign(button.style,{display:'inline-block',width:'auto',minWidth:'0',maxWidth:'100%',whiteSpace:'normal',padding:'10px 16px',margin:'6px 6px 6px 0',background:'#edf4ec',color:'#174e3a',border:'1px solid #c7d9cf',borderRadius:'10px',fontWeight:'600',lineHeight:'1.6'});
+}
+function businessTasksPanel(){
+  let panel=$('#businessTasks');if(panel)return panel;
+  panel=document.createElement('section');panel.id='businessTasks';panel.className='side-card';panel.style.gridColumn='1 / -1';panel.style.overflowWrap='anywhere';
+  panel.innerHTML='<h2>我的办理任务</h2><p>查看已保存的本机演示任务不会继续办理业务。</p><button type="button" id="refreshBusinessTasks">刷新任务</button><p id="businessTasksNotice" role="status"></p><div id="businessTaskList"></div><div id="businessTaskDetail" aria-live="polite"></div>';
+  $('#planPanel').after(panel);styleBusinessTaskButton($('#refreshBusinessTasks'));$('#refreshBusinessTasks').addEventListener('click',()=>refreshBusinessTasks());return panel;
+}
+async function showBusinessTask(taskId){
+  try{const r=await fetch('/api/v1/business-tasks/'+encodeURIComponent(taskId),{headers:demoSessionHeaders});const d=await r.json();if(!r.ok||!d.ok)throw Error('当前会话无法查看该任务');
+    const t=d.task,goal=t.goal||{},detail=$('#businessTaskDetail');
+    const blockers=(t.blockers||[]).map(x=>`<li>${escapeHtml(x.message)}</li>`).join('');
+    const stamp=v=>{const d=new Date(v);return Number.isNaN(d.getTime())?'待核实':d.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});};
+    const names={available_funds:'可用资金',daily_limit:'日累计额度',beneficiary:'收款账户',card_status:'付款卡状态',authentication:'确认与验证',budget:'预算安排'};
+    const facts=(t.facts||[]).filter(x=>names[x.check]).map(x=>`<li>${escapeHtml(names[x.check])}：${escapeHtml({satisfied:'当时已核对',missing:'当时未满足',unknown:'当时未核实'}[x.status]||'待核实')} · ${escapeHtml(stamp(x.observed_at))}</li>`).join('');
+    const constraints=Number.isInteger(t.constraints?.security_buffer_cents)?`<p>当时安全缓冲：${escapeHtml(money(t.constraints.security_buffer_cents))}；已确认支出：${escapeHtml(money(t.constraints.confirmed_expenses_cents))}。</p>`:'';
+    const history=(t.timeline||[]).map(x=>`<li>${escapeHtml(businessTaskStatus[x.status]||'待核对')} · ${escapeHtml(stamp(x.timestamp))}</li>`).join('');
+    const receipts=(t.receipts||[]).map(x=>`<li>交易记录：${escapeHtml(x.transaction_id||x.bank_request_id||x.request_id||'待核对')}</li>`).join('');
+    detail.innerHTML=`<h3>任务详情</h3><p>任务编号：${escapeHtml(t.task_id)}</p><p>收款对象：${escapeHtml(goal.beneficiary||'待补齐')} · 金额：${escapeHtml(money(goal.amount_cents))}</p><p>当前状态：${escapeHtml(businessTaskStatus[t.status]||'待核对')}</p>${constraints}<p>下一步由${t.responsible_party==='user'?'本人核对':'平台跟踪或人工核对'}；${t.authorization.strong_auth_required?'需要本人确认及强验证':'需要本人按计划核对确认'}。</p>${blockers?`<ul>${blockers}</ul>`:''}${facts?`<p>当时支付预检资料（北京时间，继续前重新核对）：</p><ul>${facts}</ul>`:''}<p>办理进度：</p><ol>${history}</ol>${receipts?`<p>结果凭证：</p><ul>${receipts}</ul>`:''}<p>查看记录不会确认转账；如需继续，仍须重新核对和确认。</p>`;
+    detail.insertAdjacentHTML('beforeend',renderSourceMaterials(t.source_materials));
+    renderPaymentTaskActions(t,detail);
+    if(['blocked','needs_clarification','unknown','processing','recovery_required'].includes(t.status)){
+      const handoff=document.createElement('button');handoff.type='button';handoff.id='paymentTaskHandoff';handoff.textContent='提交本任务的人工核查事项';styleBusinessTaskButton(handoff);detail.append(handoff);
+      handoff.addEventListener('click',async()=>{handoff.disabled=true;try{const d=await postAgent('/api/v1/business-tasks/handoff',{task_id:t.task_id});if(!d.ok)throw Error(d.message);renderHandoffCard(d.handoff_card);$('#businessTasksNotice').textContent='本地人工事项已记录，尚未完成银行业务。';}catch(e){$('#businessTasksNotice').textContent=e.message;}finally{handoff.disabled=false;}});
+    }
+
+  }catch(e){$('#businessTasksNotice').textContent=e.message;}
+}
+async function refreshBusinessTasks(){
+  businessTasksPanel();try{
+    const r=await fetch('/api/v1/business-tasks',{headers:demoSessionHeaders});const d=await r.json();if(!r.ok||!d.ok)throw Error('暂不能读取当前会话的任务');
+    const list=$('#businessTaskList');list.replaceChildren();for(const t of d.items||[]){const b=document.createElement('button');b.type='button';styleBusinessTaskButton(b);b.dataset.businessTask=t.task_id;b.textContent=`${t.goal.beneficiary||'待补齐对象'} · ${money(t.goal.amount_cents)} · ${businessTaskStatus[t.status]||'待核对'}`;b.addEventListener('click',()=>showBusinessTask(t.task_id));list.append(b);}
+    $('#businessTasksNotice').textContent=d.items.length?'已读取当前会话的任务；点击查看进度。':'当前暂无已保存的支付任务。';
+  }catch(e){$('#businessTasksNotice').textContent=e.message;}
+}
+refreshBusinessTasks();
+
+// N05: explicit reprepare returns a new card; it never calls confirm/verify.
+function taskMoneyInput(cents){return Number.isSafeInteger(cents)?`${Math.trunc(cents/100)}.${String(cents%100).padStart(2,'0')}`:'';}
+function taskMoneyCents(value){
+  if(!/^\d+(?:\.\d{1,2})?$/.test(value))throw Error('金额请填写非负数字，最多两位小数');
+  const [whole,fraction='']=value.split('.');const cents=BigInt(whole)*100n+BigInt(fraction.padEnd(2,'0'));
+  if(cents>BigInt(Number.MAX_SAFE_INTEGER))throw Error('金额过大，请重新核对');return Number(cents);
+}
+function renderPaymentTaskActions(t,detail){
+  if(t.intent!=='transfer')return;
+  const query=['processing','unknown','recovery_required'].includes(t.status);
+  const resumable=['blocked','needs_clarification','waiting_confirmation','expired'].includes(t.status);
+  if(!query&&!resumable)return;
+  const box=document.createElement('fieldset');box.style.marginTop='16px';box.style.padding='16px';box.style.border='1px solid #c7d9cf';box.style.borderRadius='12px';
+  box.innerHTML=query?'<legend>核对原请求</legend><p>结果未知不等于失败；此处只查询原记录，不会重新提交。</p><button type="button" id="taskRecheckBtn">查询原请求</button>':`<legend>重新核对支付任务</legend><p>仅准备新的确认卡，不会转账。最晚提交时间不代表银行到账承诺；留空的约束保留原设置。</p><label style="display:block">收款人 <input id="taskResumeBeneficiary" maxlength="80" value="${escapeHtml(t.goal.beneficiary||'')}" style="max-width:100%"></label><label style="display:block">金额（元） <input id="taskResumeAmount" inputmode="decimal" value="${escapeHtml(taskMoneyInput(t.goal.amount_cents))}" style="max-width:100%"></label><label style="display:block">备注 <input id="taskResumeNote" maxlength="500" value="${escapeHtml(t.goal.note||'')}" style="max-width:100%"></label><label style="display:block">至少保留（元；不能降低平台底线） <input id="taskResumeReserve" inputmode="decimal" value="${escapeHtml(taskMoneyInput(t.constraints.reserve_cents))}" style="max-width:100%"></label><label style="display:block">最晚提交时间（按本机时区输入） <input id="taskResumeDeadline" type="datetime-local" style="max-width:100%"></label>${t.constraints.deadline?`<p>原最晚提交时间：${escapeHtml(new Date(t.constraints.deadline).toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'}))}（北京时间）</p>`:''}<button type="button" id="taskResumeBtn">重新核对并生成确认卡</button>`;
+  box.querySelectorAll('label').forEach(label=>{label.style.marginBottom='10px';const input=label.querySelector('input');if(input)Object.assign(input.style,{display:'block',width:'100%',padding:'8px',border:'1px solid #c7d9cf',borderRadius:'8px',marginTop:'4px'});});
+  const status=document.createElement('p');status.id='taskResumeStatus';status.setAttribute('role','status');box.append(status);detail.append(box);
+  const button=box.querySelector('button');styleBusinessTaskButton(button);button.style.marginTop='16px';button.style.padding='12px 18px';button.style.background='#0b3b31';button.style.color='white';button.style.borderRadius='10px';button.addEventListener('click',async()=>{
+    if(busy||button.disabled)return;button.disabled=true;
+    try{
+      let changes={};if(!query){
+        const amount=taskMoneyCents($('#taskResumeAmount').value.trim());if(amount<=0)throw Error('转账金额必须大于零');
+        changes={amount_cents:amount,beneficiary:$('#taskResumeBeneficiary').value.trim()};
+        // A public history note can be redacted; preserve the private original unless edited.
+        const note=$('#taskResumeNote').value;if(note!==(t.goal.note||''))changes.note=note;
+        const reserve=$('#taskResumeReserve').value.trim();if(reserve)changes.reserve_cents=taskMoneyCents(reserve);
+        const deadline=$('#taskResumeDeadline').value;if(deadline){const date=new Date(deadline);if(Number.isNaN(date.getTime()))throw Error('请核对时间');changes.deadline=date.toISOString();}
+      }
+      const d=await postAgent('/api/v1/business-tasks/'+(query?'recheck':'resume'),{task_id:t.task_id,expected_version:t.version,changes});
+      if(!d.reprepared&&!d.query_only)throw Error(d.message||'暂时不能继续，请刷新任务');
+      status.textContent=d.message||'已核对，尚未办理';if(d.plan_view)receiveAgentResponse(d);await refreshBusinessTasks();await showBusinessTask(t.task_id);
+    }catch(e){status.textContent=e.message;}finally{button.disabled=false;}
+  });
+}
+
+// N08 owner-approved local family scopes; no seeded grants become IAM permissions.
+async function loadFamilyPermissions(){
+  if(identityMode!=='SELF_HOSTED')return;
+  const r=await fetch('/api/v1/family/permissions');const d=await r.json();if(!r.ok||!d.ok||!d.items?.length)return;
+  let panel=$('#familyPermissions');if(!panel){panel=document.createElement('section');panel.id='familyPermissions';panel.className='side-card';businessTasksPanel().after(panel);}
+  panel.innerHTML='<h2>家庭授权与协助</h2><p>仅本机虚构账户。阅读、风险提醒和协助起草分别核准；付款仍由账户本人认证、最终确认。</p>';
+  for(const record of d.items){
+    const box=document.createElement('fieldset');box.style.cssText='padding:16px;margin:12px 0;border:1px solid #c7d9cf;border-radius:12px';box.dataset.familyGrant=record.grant_id;
+    const consent=record.consent;box.innerHTML=`<legend>${escapeHtml(record.subject_id)} ← ${escapeHtml(record.guardian_id)}</legend><p>权限版本：${consent.version}</p>`;
+    if(record.is_owner){
+      for(const [key,label] of [['read','允许阅读账户资料'],['notify','允许接收最小风险提醒'],['assist','允许协助起草（含阅读）']]){const row=document.createElement('label');row.style.display='block';const input=document.createElement('input');input.type='checkbox';input.dataset.familyScope=key;input.checked=consent[key];row.append(input,document.createTextNode(label));box.append(row);}
+      const code=document.createElement('input');code.type='password';code.inputMode='numeric';code.autocomplete='one-time-code';code.maxLength=6;code.setAttribute('aria-label','核准家庭授权的动态码');code.placeholder='本人下一枚动态码';box.append(code);
+      const save=document.createElement('button');save.type='button';save.dataset.familySave='';save.textContent='核准或撤回所选权限';styleBusinessTaskButton(save);box.append(save);
+      const notice=document.createElement('p');notice.setAttribute('role','status');box.append(notice);
+      save.addEventListener('click',async()=>{save.disabled=true;try{const permissions=Object.fromEntries([...box.querySelectorAll('[data-family-scope]')].map(x=>[x.dataset.familyScope,x.checked]));const result=await postAgent('/api/v1/family/permissions',{grant_id:record.grant_id,expected_version:consent.version,permissions,code:code.value});code.value='';notice.textContent=result.message;if(result.ok)await loadFamilyPermissions();}catch(_){notice.textContent='结果尚不能确认，请刷新权限记录，不要重复提交业务。';}finally{save.disabled=false;}});
+    }else{
+      const input=document.createElement('input');input.setAttribute('aria-label','家庭协助需求');input.placeholder='例如：给妈妈转1元';input.maxLength=2000;input.style.width='100%';box.append(input);
+      const draft=document.createElement('button');draft.type='button';draft.dataset.familyDraft='';draft.textContent='按授权生成协助草稿';styleBusinessTaskButton(draft);box.append(draft);
+      draft.addEventListener('click',async()=>{draft.disabled=true;try{const result=await postAgent('/api/v1/family/chat',{message:input.value,subject_id:record.subject_id,mode:'assist'});receiveAgentResponse(result);}finally{draft.disabled=false;}});
+    }
+    panel.append(box);
+  }
+  const label=document.createElement('label');label.textContent='本人核对协助草稿的任务编号';const task=document.createElement('input');task.id='familyReviewTask';task.maxLength=128;label.append(task);panel.append(label);
+  const review=document.createElement('button');review.id='familyReviewBtn';review.type='button';review.textContent='本人读取并核对协助草稿';styleBusinessTaskButton(review);panel.append(review);
+  review.addEventListener('click',async()=>{review.disabled=true;try{receiveAgentResponse(await postAgent('/api/v1/family/review',{task_id:task.value.trim()}));await refreshBusinessTasks();}finally{review.disabled=false;}});
+}
+
+function renderDomainReviews(reviews){
+  if(!reviews||!Object.keys(reviews).length)return '';
+  const labels={payment:'支付与交易',antifraud:'反诈风控',finance_health:'财务健康',family:'家庭授权',subscription:'订阅资料',card:'卡片资料'};
+  const rows=Object.entries(reviews).filter(([key])=>labels[key]).map(([key,value])=>`<li>${escapeHtml(labels[key])}：${value.status==='ready'?'资料已核对':'存在待核实或待选择事项'}，${Number.isInteger(value.fact_count)?value.fact_count:0}项平台事实。<small>${escapeHtml((value.sources||[]).join('；'))}</small></li>`).join('');
+  return `<details id="domainReviewDetails"><summary>领域核查依据</summary><p>领域报告是核查建议，不是授权、受理或到账证明。</p><ul>${rows}</ul></details>`;
+}
+
+// N12: local service workflows preserve independent bank, user and human statuses.
+const serviceReasons={not_authorized:'用户表示不是本人授权',unfamiliar_merchant:'不认识商户名称',duplicate_charge:'怀疑重复扣款',refund_pending:'退款尚未到账'};
+const localCaseStatus={LOCAL_QUEUED:'待人工领取',LOCAL_CLAIMED:'本地人工已接收',LOCAL_CLOSED:'本地已结单；银行问题仍待核实'};
+const serviceRequestKeys=new Map();let serviceRequestCounter=0;
+function serviceRequestId(kind,body){const key=JSON.stringify([kind,body]);if(!serviceRequestKeys.has(key))serviceRequestKeys.set(key,conversationId+'-s'+(++serviceRequestCounter));return serviceRequestKeys.get(key);}
+function servicePanel(){
+  let p=$('#serviceTasksPanel');if(p)return p;p=document.createElement('section');p.id='serviceTasksPanel';p.className='side-card';
+  p.innerHTML='<h2>交易异议与资金准备</h2><p>仅本地演示服务记录。银行交易事实与用户主张分开；保护、人工接收和退款分别核对。</p><p id="serviceNotice" role="status"></p><div class="service-forms"><fieldset><legend>记录交易异议</legend><label>选择本人账单记录<select id="serviceTransaction"><option value="">请先核对交易</option></select></label><label>你的主张<select id="serviceReason"><option value="not_authorized">这笔交易不是本人授权</option><option value="unfamiliar_merchant">不认识商户名称</option><option value="duplicate_charge">怀疑重复扣款</option><option value="refund_pending">退款尚未到账</option></select></label><button type="button" id="openDisputeBtn">保存异议记录</button><p>本步骤不挂失、不退款，不等于银行正式争议受理。需要保护卡片时，请在原卡片流程核对对象并本人确认。</p></fieldset><fieldset><legend>期限资金准备</legend><label>准备金额（元）<input id="serviceFundingAmount" inputmode="decimal"></label><label>至少保留（元）<input id="serviceFundingReserve" inputmode="decimal" value="1000"></label><label>最晚提交时间（本机时区）<input id="serviceFundingDeadline" type="datetime-local"></label><p>本方案不借款，不自动赎回，不会自动办理付款。预计到账不等于可用资金。</p><button type="button" id="openFundingBtn">核对并保存资金方案</button></fieldset></div><button type="button" id="refreshServiceTasks">刷新服务记录</button><div id="serviceTaskList"></div><div id="serviceTaskDetail" aria-live="polite"></div>';
+  businessTasksPanel().after(p);
+  for(const b of p.querySelectorAll('button'))styleBusinessTaskButton(b);
+  $('#openDisputeBtn').addEventListener('click',()=>openServiceTask('dispute'));
+  $('#openFundingBtn').addEventListener('click',()=>openServiceTask('funding'));
+  $('#refreshServiceTasks').addEventListener('click',()=>loadServiceTasks());return p;
+}
+async function openServiceTask(kind){
+  const button=$(kind==='dispute'?'#openDisputeBtn':'#openFundingBtn');if(button.disabled||busy)return;button.disabled=true;
+  try{
+    let body;if(kind==='dispute'){if(!$('#serviceTransaction').value)throw Error('请先选择并核对交易');body={transaction_id:$('#serviceTransaction').value,reason:$('#serviceReason').value};}
+    else{const date=new Date($('#serviceFundingDeadline').value);if(Number.isNaN(date.getTime()))throw Error('请填写含明确时间的提交期限');body={target_cents:taskMoneyCents($('#serviceFundingAmount').value.trim()),reserve_cents:taskMoneyCents($('#serviceFundingReserve').value.trim()),deadline:date.toISOString()};}
+    const d=await postAgent('/api/v1/service-tasks/'+kind,{...body,request_id:serviceRequestId(kind,body)});if(!d.ok)throw Error(d.message||'记录尚不能确认');$('#serviceNotice').textContent='仅本地服务记录已保存；没有办理付款、保护或退款。';await loadServiceTasks();await showServiceTask(d.service_task.task_id);
+  }catch(e){$('#serviceNotice').textContent=e.message;}finally{button.disabled=false;}
+}
+async function showServiceTask(id){
+  try{const r=await fetch('/api/v1/service-tasks/'+encodeURIComponent(id),{headers:demoSessionHeaders});const d=await r.json();if(!r.ok||!d.task)throw Error('当前会话无法查看该服务记录');const t=d.task;const detail=$('#serviceTaskDetail');
+    const time=v=>{const date=new Date(v);return Number.isNaN(date.getTime())?'待核实':date.toLocaleString('zh-CN',{timeZone:'Asia/Shanghai'});};
+    const facts=t.kind==='dispute'?`<p>账单事实：${escapeHtml(t.bank_fact.merchant)} · ${escapeHtml(money(t.bank_fact.amount_cents))} · ${escapeHtml(t.bank_fact.status)}</p><p>用户主张：${escapeHtml(serviceReasons[t.user_claim]||'待核实')}。账单存在此记录不能否定用户异议。</p><p>保护操作：须通过原卡片流程独立核对及本人确认。</p><p>银行正式案件号：尚未取得；退款尚未核实。</p>`:`<p>资金目标：${escapeHtml(money(t.goal.target_cents))}；至少保留：${escapeHtml(money(t.goal.reserve_cents))}；不借款。</p><p>最晚提交：${escapeHtml(time(t.goal.deadline))}（北京时间，不是到账承诺）。</p><p>当前可安排：${escapeHtml(money(t.funding_plan.spendable_now_cents))}；缺口：${escapeHtml(money(t.funding_plan.shortfall_cents))}；状态：${escapeHtml({ready_now:'本次核对可满足',shortfall:'存在资金缺口',needs_review:'资金事实待核实',deadline_expired:'期限已过'}[t.funding_plan.status]||'待核实')}。</p><p>不会自动办理付款；预计收入、未接入资产不计作确定可用。</p>`;
+    detail.innerHTML=`<h3>${t.kind==='dispute'?'交易异议跟进':'期限资金方案'}</h3><p>本地任务编号：${escapeHtml(t.task_id)}</p>${facts}<p>事实核对时间：${escapeHtml(time(t.bank_fact?.observed_at||t.funding_plan?.observed_at))}（北京时间）</p><p>人工进度：${escapeHtml(t.local_case?localCaseStatus[t.local_case.status]||'待核实':'尚未提交人工核查事项')}</p><p>当前责任：${t.local_case?.status==='LOCAL_CLAIMED'?'本地坐席核对，银行结果仍待核实':'本人核对或联系正式银行渠道'}。</p><p>${escapeHtml(t.notice)}</p><ol>${(t.timeline||[]).map(x=>`<li>${escapeHtml({dispute_recorded:'保存异议记录',funding_prepared:'保存资金方案',handoff_requested:'提交本地人工事项',facts_rechecked:'重新核对事实'}[x.event]||'更新记录')} · ${escapeHtml(time(x.observed_at))}</li>`).join('')}</ol>`;
+    detail.insertAdjacentHTML('beforeend',renderSourceMaterials(t.sources));
+    const sourceLabel=document.createElement('label');sourceLabel.textContent='补充已核对材料的来源编号（仅参考）';const sourceInput=document.createElement('input');sourceInput.id='serviceSourceReference';sourceInput.maxLength=128;sourceLabel.append(sourceInput);detail.append(sourceLabel);
+    const attach=document.createElement('button');attach.type='button';attach.id='serviceAttachSource';attach.textContent='关联已有资料引用';styleBusinessTaskButton(attach);detail.append(attach);
+    const notice=document.createElement('p');notice.setAttribute('role','status');detail.append(notice);
+    attach.addEventListener('click',async()=>{attach.disabled=true;try{const result=await postAgent('/api/v1/service-tasks/evidence',{task_id:t.task_id,source_id:sourceInput.value.trim(),expected_version:t.version});if(!result.ok)throw Error(result.message);await showServiceTask(t.task_id);}catch(e){notice.textContent=e.message;}finally{attach.disabled=false;}});
+    const action=(id,text,kind)=>{const b=document.createElement('button');b.id=id;b.type='button';b.textContent=text;styleBusinessTaskButton(b);detail.append(b);b.addEventListener('click',async()=>{b.disabled=true;try{const result=await postAgent('/api/v1/service-tasks/'+kind,{task_id:t.task_id,...(kind==='recheck'?{expected_version:t.version}:{})});if(!result.ok)throw Error(result.message);await showServiceTask(t.task_id);}catch(e){notice.textContent=e.message;}finally{b.disabled=false;}});};
+    action('serviceRecheckBtn','重新核对事实','recheck');if(!t.local_case)action('serviceHandoffBtn','提交本地人工核查事项','handoff');else{const b=document.createElement('button');b.type='button';b.textContent='刷新人工进度';styleBusinessTaskButton(b);b.addEventListener('click',()=>showServiceTask(t.task_id));detail.append(b);}
+  }catch(e){$('#serviceNotice').textContent=e.message;}
+}
+async function loadServiceTasks(){
+  servicePanel();try{const r=await fetch('/api/v1/service-tasks',{headers:demoSessionHeaders});const d=await r.json();if(!r.ok||!d.ok)throw Error('服务任务只面向已接入资料的本人演示账户开放');const list=$('#serviceTaskList');list.replaceChildren();for(const t of d.items){const b=document.createElement('button');b.type='button';styleBusinessTaskButton(b);b.dataset.serviceTask=t.task_id;b.textContent=(t.kind==='dispute'?'交易异议':'资金准备')+' · '+(t.local_case?localCaseStatus[t.local_case.status]:'已保存，待本人核对');b.addEventListener('click',()=>showServiceTask(t.task_id));list.append(b);}
+    const state=await(await fetch('/api/state',{headers:demoSessionHeaders})).json();const select=$('#serviceTransaction');if(select.options.length===1)for(const item of state.transactions?.items||[]){const option=document.createElement('option');option.value=item.id;option.textContent=`${item.date||''} · ${item.merchant||'待核实商户'} · ${money(item.amount_cents)}`;select.append(option);}
+  }catch(e){$('#serviceNotice').textContent=e.message;}
+}
+loadServiceTasks();
+
+function renderSourceMaterials(sources){
+ if(!sources?.length)return '';
+ const rows=sources.map(source=>{const e=source.evidence||{},kind={rag:'知识引用',ocr:'人工核对的图片草稿',voice:'人工核对的语音草稿'}[source.kind]||'资料';
+ const references=(e.citations||[]).map(c=>`${c.source_path}:L${c.line_start} · ${c.version}`).join('；');
+ const fields=Object.entries(e.field_evidence||{}).map(([name,values])=>`${name==='amount'?'金额':'收款人'}位置：${values.map(v=>`第${v.line+1}行／置信度${(v.confidence_milli/10).toFixed(1)}%`).join('、')}`).join('；');
+ return `<li>${escapeHtml(kind)} · ${escapeHtml(source.source_id)}<p>${source.current_access===false?'资料已失效或权限已变化，请重新核对。':escapeHtml(references||fields||'仅保存文件／音频摘要，未留存原始材料。')}${e.draft_changed===true?' 草稿已修改，以当前确认卡为准。':''}</p></li>`;}).join('');
+ return `<details class="source-materials"><summary>查看资料来源留证</summary><p>材料仅作参考，不代表已授权、已受理、已保护或已退款。</p><ul>${rows}</ul></details>`;
+}

@@ -228,5 +228,14 @@
     "member_abi_sha256": "6affee37460c01332b609aaff8ae54277bbb843b896b453ee54cae631001f19c",
     "five_deletions_preserved": true,
     "no_commit_push": true
+  },
+  "historical_only": true,
+  "superseded_by": "docs/assets/N16发行验收.json",
+  "current_n16": {
+    "tests": 888,
+    "record": "docs/assets/N16发行验收.json",
+    "runtime": "same app as N15",
+    "new_image": "NOT_BUILT_DOCKER_BROKEN",
+    "current_hosted_ci": "NOT_RUN"
   }
 }

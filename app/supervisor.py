@@ -6,10 +6,11 @@ sandbox for malicious Python. Conflict review never resolves facts by voting.
 """
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime,timezone
 
 from domain_agent_contract import DomainFinding, DomainProposal, freeze_json, thaw
 from domain_snapshots import DomainSnapshot
-from transaction_agent import PaymentSnapshot, AgentMessage, context_digest
+from transaction_agent import PaymentSnapshot, AgentMessage, context_digest, payment_recovery
 
 
 class SupervisorError(ValueError):
@@ -42,16 +43,25 @@ class Coordination:
     conflicts: tuple
     status: str
     reviewed_tools: tuple
+    payment_recovery: object = None
 
     def summary(self):
         # No raw dialogue, source facts, OTP, token, or free-form agent prose.
-        return {'status':self.status, 'domains':list(self.domains),
+        result = {'status':self.status, 'domains':list(self.domains),
                 'conflict_keys':list(dict.fromkeys(c['key'] for c in self.conflicts)),
                 'reviewed_tools':list(self.reviewed_tools), 'mode':'REVIEW_ONLY',
                 'message': {'ready':'已核对本次办理资料，仍需按计划确认或验证。',
                     'needs_review':'资料存在冲突或尚未核实，请先核对或联系人工。',
                     'needs_user_choice':'预算条件未满足，请先选择调整方式。',
                     'needs_clarification':'请先补齐并核验办理信息。'}.get(self.status,'资料待核对。')}
+        result['domain_reviews']={domain:{'status':self.status,'authority':'advisory_only',
+            'fact_count':sum(len(m.payload.facts) for m in self.messages if m.sender==domain and type(m.payload) is DomainFinding),
+            'missing_count':sum(len(m.payload.missing_fields) for m in self.messages if m.sender==domain and type(m.payload) is DomainFinding),
+            'sources':list(dict.fromkeys(ref for m in self.messages if m.sender==domain and type(m.payload) is DomainFinding for ref in m.payload.evidence))}
+            for domain in self.domains}
+        if self.payment_recovery is not None:
+            result['payment_recovery'] = thaw(self.payment_recovery)
+        return result
 
 
 class Supervisor:
@@ -88,6 +98,10 @@ class Supervisor:
             if type(snapshot) is not PaymentSnapshot:
                 raise SupervisorError('Invalid payment source')
             PaymentSnapshot.from_preflight(ctx, snapshot.report)
+            try:
+                captured=datetime.fromisoformat(snapshot.report['generated_at'])
+                if captured.tzinfo is None or not -60<=(datetime.now(timezone.utc)-captured).total_seconds()<=300:raise ValueError('stale preflight')
+            except (KeyError,TypeError,ValueError):raise SupervisorError('Payment preflight expired or time unverified')
             facts, references = [], []
             for key, check in snapshot.report['checks'].items():
                 source = 'preflight.py:build_payment_preflight#' + key
@@ -100,6 +114,10 @@ class Supervisor:
         if (not snapshot.evidence or any(ref not in _SOURCES.get(domain, set()) for ref in snapshot.evidence)
                 or any(f.get('source') not in snapshot.evidence for f in snapshot.facts)):
             raise SupervisorError('Unrecognized evidence source')
+        try:
+            captured=datetime.fromisoformat(snapshot.captured_at)
+            if captured.tzinfo is None or not -60<=(datetime.now(timezone.utc)-captured).total_seconds()<=300:raise ValueError('stale capture')
+        except (ValueError,TypeError):raise SupervisorError('Domain snapshot expired or time unverified')
         global_sources = {'ledger_views.py:build_ledger_views', 'banking_agent.py:MockBankCore.financial_health_report',
             'banking_agent.py:MockBankCore.list_family_relationships', 'banking_agent.py:MockBankCore.subscriptions_query',
             'banking_agent.py:MockBankCore.cards_query', 'banking_agent.py:MockBankCore.card_status_query'}
@@ -207,18 +225,23 @@ class Supervisor:
                 raise SupervisorError('No reviewed route for this request')
             messages = self._collect(ctx, domains, snapshots)
             claims, conflicts = self._claims(messages)
-            status = 'needs_review' if conflicts else 'ready'
+            status = 'needs_review' if conflicts or any(m.sender!='payment' and type(m.payload) is DomainFinding and m.payload.missing_fields for m in messages) else 'ready'
             if any(type(s) is DomainSnapshot and s.status == 'unknown' for s in snapshots.values()):status='needs_review'
             if 'family' in snapshots:
                 grants=[f['value'] for f in snapshots['family'].facts if f.get('name')=='grant']
                 if grants and any(g.get('active_at_capture') is not True for g in grants):status='needs_review'
-            if 'payment' in snapshots and not conflicts:
-                checks = snapshots['payment'].report['checks']
-                if checks['budget']['status'] == 'missing':status='needs_user_choice'
-                elif any(checks[k]['status'] != 'satisfied' for k in ('available_funds','daily_limit','card_status','budget')):status='needs_review'
-                elif checks['beneficiary']['status'] != 'satisfied':status='needs_clarification'
+            recovery = None
+            if 'payment' in snapshots:
+                recovery = payment_recovery(snapshots['payment'].report)
+                if status == 'ready':
+                    status = recovery['status']
+                else:
+                    # A valid payment snapshot cannot override another domain's conflict or revoked grant.
+                    recovery['status'] = status
+                    recovery['user_options'] = [{'action':'recheck_facts'},{'action':'human_handoff'}]
             tools = _TRANSFER if status == 'ready' and intent == 'transfer' and phase == 'planning' else ()
-            return Coordination(context_digest(ctx), domains, messages, claims, conflicts, status, tools)
+            return Coordination(context_digest(ctx), domains, messages, claims, conflicts, status, tools,
+                                freeze_json(recovery) if recovery is not None else None)
         except SupervisorError:
             raise
         except Exception as error:
@@ -229,7 +252,7 @@ class Supervisor:
         try:
             messages = self._collect(ctx, (domain,), {domain:snapshot})
             claims, conflicts = self._claims(messages)
-            status = 'needs_review' if conflicts or (type(snapshot) is DomainSnapshot and snapshot.status == 'unknown') else 'ready'
+            status = 'needs_review' if conflicts or any(m.sender!='payment' and type(m.payload) is DomainFinding and m.payload.missing_fields for m in messages) or (type(snapshot) is DomainSnapshot and snapshot.status == 'unknown') else 'ready'
             return Coordination(context_digest(ctx),(domain,),messages,claims,conflicts,status,())
         except SupervisorError:
             raise

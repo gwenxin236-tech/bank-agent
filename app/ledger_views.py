@@ -7,7 +7,7 @@ adapters.  No model output is used for arithmetic or account state.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime,timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 
@@ -163,10 +163,11 @@ def build_ledger_views(
         if _in_period(item, period_start, period_end):
             source_items.append(item)
 
-    processing_items = [item for item in source_items if _is_processing(item)]
+    settled_keys={_dedup_key(x) for x in source_items if _status(x) in {'succeeded','posted','settled','completed','success'} and _dedup_key(x)}
+    processing_items = _unique_completed([item for item in source_items if _is_processing(item) and (not _dedup_key(item) or _dedup_key(item) not in settled_keys)])
     restricted_items = [item for item in source_items if _is_restricted(item)]
     expected_items = [item for item in source_items if _is_expected(item)]
-    completed_items = [item for item in source_items if not _is_processing(item) and not _is_restricted(item) and not _is_expected(item)]
+    completed_items = [item for item in source_items if _status(item) in {'succeeded','posted','settled','completed','success'} and not _is_restricted(item) and not _is_expected(item)]
 
     # De-duplicate only explicit cross-source links, separately for each view.
     consumer_candidates = [item for item in completed_items if _is_consumption(item) or _is_refund(item)]
@@ -198,7 +199,7 @@ def build_ledger_views(
     expected_arrival_cents = sum(abs(_amount(item)) for item in expected_items if _amount(item) > 0)
     funds = dict(balances or {})
     funds_status = {
-        "available_cents": funds.get("available_cents", funds.get("balance_cents", 0)),
+        "available_cents": funds.get("available_cents", funds.get("balance_cents")),
         "processing_cents": funds.get("processing_cents", processing_cents),
         "restricted_cents": funds.get("restricted_cents", restricted_cents),
         "expected_arrival_cents": funds.get("expected_arrival_cents", expected_arrival_cents),
@@ -233,3 +234,35 @@ def build_ledger_views(
             "projected_income": "预计收入不计入可用余额",
         },
     }
+
+
+def build_funding_plan(*,available_cents,target_cents=0,reserve_cents=0,commitments=(),sources=(),deadline=None,now=None):
+    """Read-only integer plan. Future inflows never become current availability."""
+    for name,value in [('available',available_cents),('target',target_cents),('reserve',reserve_cents)]:
+        if value is None and name=='available':continue
+        if type(value) is not int or not 0<=value<=2**63-1:raise ValueError('nonnegative integer cents required')
+    now=now or datetime.now(timezone.utc)
+    if deadline is not None:
+        instant=datetime.fromisoformat(deadline)
+        if instant.tzinfo is None:raise ValueError('timezone-aware deadline required')
+    seen={};conflict=False;total=0
+    for item in commitments:
+        if item.get('status')!='confirmed':continue
+        amount=item.get('amount_cents')
+        if type(amount) is not int or amount<0:conflict=True;continue
+        key=item.get('id')
+        if key and key in seen:
+            if seen[key]!=amount:conflict=True
+            continue
+        if key:seen[key]=amount
+        total+=amount
+    future=sum(x['amount_cents'] for x in sources if type(x.get('amount_cents')) is int and x['amount_cents']>0)
+    spendable=None if available_cents is None or conflict else max(0,available_cents-total-reserve_cents)
+    gap=None if spendable is None else max(0,target_cents-spendable)
+    status='needs_review' if gap is None else 'shortfall' if gap else 'ready_now'
+    if deadline is not None and now>=instant:status='deadline_expired'
+    return {'status':status,'target_cents':target_cents,'available_cents':available_cents,'confirmed_expenses_cents':total,
+        'reserve_cents':reserve_cents,'spendable_now_cents':spendable,'shortfall_cents':gap,'future_unavailable_cents':future,
+        'deadline':deadline,'coverage':'current_authorized_account_only','source':'ledger_views.py:build_funding_plan',
+        'observed_at':now.isoformat(),'business_executed':False,'options':['review_budget','human_handoff'] if status!='ready_now' else [],
+        'message':'资金准备方案只核对当前可用资金、确认支出和保留额；预计到账不计可用，不代表到账承诺，不自动借贷或赎回。'}

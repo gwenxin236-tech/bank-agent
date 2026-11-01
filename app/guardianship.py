@@ -56,6 +56,8 @@ class GuardianshipStore:
                 raise ValueError('Invalid identity fixture')
             if type(account['opening_cents']) is not int or account['opening_cents'] < 0:
                 raise ValueError('Invalid opening balance')
+        self.require_explicit_consent=False
+        self.identity_device_resolver=None
         self.lock = threading.RLock()
         self.mutation_lock = threading.RLock()
         self.clock = lambda: datetime.now(timezone.utc)
@@ -72,6 +74,7 @@ class GuardianshipStore:
                     task_id TEXT PRIMARY KEY, grant_id TEXT NOT NULL, business_day TEXT NOT NULL,
                     amount_cents INTEGER NOT NULL, status TEXT NOT NULL);
             ''')
+            self.db.execute('CREATE TABLE IF NOT EXISTS family_consents (grant_id TEXT PRIMARY KEY,version INTEGER NOT NULL,read_allowed INTEGER NOT NULL,notify_allowed INTEGER NOT NULL,assist_allowed INTEGER NOT NULL,approved_by TEXT NOT NULL,updated_at TEXT NOT NULL)')
             for data in config['guardianships']:
                 item = Guardianship(**data).validate()
                 if item.guardian_id not in self.accounts or item.subject_id not in self.accounts:
@@ -113,6 +116,24 @@ class GuardianshipStore:
                 (item.authorization_type, item.daily_limit_cents, item.valid_from, item.expires_at, item.revoked, grant_id))
             return item
 
+    def device_for(self,user):
+        return self.identity_device_resolver(user) if self.identity_device_resolver else self.accounts.get(user,{}).get('device_id')
+
+    def consent(self,grant_id):
+        with self.lock:
+            row=self.db.execute('SELECT * FROM family_consents WHERE grant_id=?',(grant_id,)).fetchone()
+        return {'version':row['version'] if row else 0,**{k:bool(row[k+'_allowed']) if row else False for k in ('read','notify','assist')}}
+
+    def set_consent(self,grant_id,owner,version,permissions):
+        if set(permissions)!={'read','notify','assist'} or any(type(v) is not bool for v in permissions.values()) or (permissions['assist'] and not permissions['read']):raise ValueError('assist requires explicit read consent')
+        with self.mutation_lock,self.lock,self.db:
+            grant=self.get(grant_id)
+            if not grant or grant.subject_id!=owner or not grant.active(self.clock()):raise PermissionError('active owner grant required')
+            if type(version) is not int or version!=self.consent(grant_id)['version']:raise ValueError('stale consent revision')
+            self.db.execute('INSERT INTO family_consents VALUES (?,?,?,?,?,?,?) ON CONFLICT(grant_id) DO UPDATE SET version=excluded.version,read_allowed=excluded.read_allowed,notify_allowed=excluded.notify_allowed,assist_allowed=excluded.assist_allowed,approved_by=excluded.approved_by,updated_at=excluded.updated_at',
+                (grant_id,version+1,int(permissions['read']),int(permissions['notify']),int(permissions['assist']),owner,self.clock().isoformat()))
+        return self.consent(grant_id)
+
     def used(self, grant_id, excluding_task=''):
         with self.lock:
             return self.db.execute('''SELECT coalesce(sum(amount_cents),0) FROM guardianship_usage
@@ -128,7 +149,7 @@ class GuardianshipStore:
     def guardian_targets(self, subject):
         with self.lock:
             rows = self.db.execute('SELECT * FROM guardianships WHERE subject_id=? ORDER BY grant_id', (subject,)).fetchall()
-            return [r['guardian_id'] for r in rows if self.decode(r).active(self.clock())]
+            return [r['guardian_id'] for r in rows if self.decode(r).active(self.clock()) and (not self.require_explicit_consent or self.consent(r['grant_id'])['notify'])]
 
     def evaluate(self, intent, amount, context, subject, task_id=''):
         """Pure matrix input for PolicyEngine; 'full' NEVER removes hard exclusions."""
@@ -138,6 +159,10 @@ class GuardianshipStore:
         if (grant is None or not grant.active(self.clock()) or grant.subject_id != subject
                 or context.get('subject_id') != subject or grant.guardian_id != context.get('guardian_id')):
             reason = '守护关系不存在、未生效、已过期或已撤销'
+        elif self.require_explicit_consent and (context.get('consent_version')!=self.consent(grant.grant_id)['version'] or not self.consent(grant.grant_id)['read'] or (intent not in self.READ_INTENTS and not self.consent(grant.grant_id)['assist'])):
+            reason='本人家庭阅读或协助授权未生效、已变更或已撤回'
+        elif self.require_explicit_consent and mode!='assist':
+            reason='自建身份仅支持本人最终确认的家庭协助'
         elif mode not in {'delegate', 'assist'}:
             reason = '不支持的家庭操作方式'
         elif intent in self.READ_INTENTS:
