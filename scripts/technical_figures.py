@@ -172,7 +172,7 @@ class TechnicalFigure(Flowable):
         self.note('相同商户、金额、日期不足以认定重复；coverage 明确来源边界',17)
 
     def draw_testcounts(self):
-        evidence=json.loads((self.root/'docs/assets/银伴更名源码验收.json').read_text(encoding='utf-8'))
+        evidence=json.loads((self.root/'docs/assets/评审修订源码验收.json').read_text(encoding='utf-8'))
         counts=evidence['test_modules'];total=evidence['regression']['current_full_windows']['tests']
         if sum(counts.values())!=total:raise ValueError('actual test module counts mismatch')
         record={'total':total,'modules':counts}

@@ -16,9 +16,11 @@ if(!record.startsWith(path.join(root,'data','verification')+path.sep))throw Erro
 const work=path.join(record,'deck-'+(process.env.DECK_REVISION||'r1'));await fs.mkdir(work,{recursive:true});
 const recording=JSON.parse(await fs.readFile(path.join(record,'recording/report.json'),'utf8'));
 if(recording.status!=='PASS'||!recording.video||recording.video.duration_seconds>300)throw Error('Current real recording must pass first');
-const checked=spawnSync(python,[path.join(root,'scripts/source_release.py'),'evidence',path.join(root,'docs/assets/银伴更名源码验收.json'),'--root',root],{encoding:'utf8',timeout:30000});
+const checked=spawnSync(python,[path.join(root,'scripts/source_release.py'),'evidence',path.join(root,'docs/assets/评审修订源码验收.json'),'--root',root],{encoding:'utf8',timeout:30000});
 if(checked.status!==0)throw Error('Current material evidence rejected: '+checked.stderr);
 const evidence=JSON.parse(checked.stdout);const fullTests=evidence.regression.current_full_windows.tests;
+const ragEvidence=JSON.parse(await fs.readFile(path.join(root,'docs/assets/评审修订RAG验收.json'),'utf8'));
+if(!['lexical','hybrid','reranked'].every(m=>ragEvidence.summaries[m].count===120&&ragEvidence.summaries[m].correct===120))throw Error('Strict three-mode RAG evidence required');
 const runtimePassed=evidence.offline.status==='PASS';
 const reference=process.env.DECK_REFERENCE_FILE||null;
 const referenceSha='286472fec9d87a3358493ce97daf3dc825cfdaa44e1ab4d43cbff9fbedc29a43';
@@ -34,7 +36,7 @@ function text(value,x,y,w,h,size=25,color=C.ink,bold=false){const q=rect(x,y,w,h
 function line(x,y,w,color=C.line){rect(x,y,w,1,color);}
 function arrow(x,y,w=50){text('→',x,y,w,42,32,C.blue,true);}
 function node(title,body,x,y,w=245,h=100){rect(x,y,w,h,C.pale,C.line);text(title,x+15,y+13,w-30,34,25,C.ink,true);text(body,x+15,y+51,w-30,h-55,18,C.muted);}
-function slide(title,section,notes,sources){s=p.slides.add();s.background.fill=C.white;rect(0,0,1280,44,C.blue);text('银伴——银行智能服务助手',44,10,600,29,18,C.white,true);text(section,850,10,380,29,18,C.white);text(title,58,75,1160,65,38,C.ink,true);line(58,149,1164);text('竞赛原型 · 本地/虚构资金 · 2026-11-01',58,685,950,23,13,C.muted);text(String(p.slides.items.length).padStart(2,'0'),1178,685,50,23,14,C.muted);
+function slide(title,section,notes,sources){s=p.slides.add();s.background.fill=C.white;rect(0,0,1280,44,C.blue);text('银伴——银行智能服务助手',44,10,600,29,18,C.white,true);text(section,850,10,380,29,18,C.white);text(title,58,75,1160,65,38,C.ink,true);line(58,149,1164);text('竞赛原型 · 本地/虚构资金 · 2026-11-02修订',58,685,950,23,13,C.muted);text(String(p.slides.items.length).padStart(2,'0'),1178,685,50,23,14,C.muted);
  s.speakerNotes.text=`讲稿：${lectures[p.slides.items.length-1]}\n核验依据（不口述）：${notes}\n${sources.join('\n')}\n本页预算${timings[p.slides.items.length-1]}秒，现场计时另验。`;return s;}
 async function image(name,x,y,w,h,alt){const data=await fs.readFile(path.join(record,'recording',name));const iw=data.readUInt32BE(16),ih=data.readUInt32BE(20);const scale=Math.min(w/iw,h/ih);s.images.add({blob:new Uint8Array(data),contentType:'image/png',alt,position:{left:x+(w-iw*scale)/2,top:y+(h-ih*scale)/2,width:iw*scale,height:ih*scale}});}
 function small(value,y=630,color=C.muted){text(value,58,y,1164,40,20,color);}
@@ -42,18 +44,18 @@ slide('银伴——银行智能服务助手','银行业务 · 安全Agent','介�
 text('自然语言办理银行业务',64,235,1120,90,62,C.ink,true);text('多领域协作，平台统一授权与执行',69,353,1120,57,34,C.blue,true);
 line(69,451,1100,C.blue);text('本地知识检索与独立重排 · OCR核对草稿 · 受控动态DAG',69,490,1100,50,27);text(`${fullTests}项本地回归  /  源码清单可核验`,69,560,1100,45,27,C.green,true);
 text('项目负责人：宫文馨  |  成员：董有轩、李浩林、郭嘉乐、李苏润',69,623,1100,35,20,C.ink);
-slide('自然语言请求需要四道可信边界','01 需求与业务边界','依据原始赛题，不称独立用户调研或效率提升。',['人工智能赛道原始要求.docx P11-P23','app/banking_agent.py']);
-const needs=[['要素不完整','“给妈妈转账”先补齐金额和可信账户'],['业务有副作用','理解意图不等于授权，用户核对原计划'],['结果会不确定','超时查原请求，不能重新转一次或补写成功'],['任务可能中断','持久化节点状态，回退只执行已声明补偿']];
+slide('一个支付任务贯穿理解、核对与执行','01 需求与业务边界','以已实现支付预检说明流程；没有采集传统App对照耗时，不报告提效百分比。',['app/preflight.py','app/payment_tasks.py','app/banking_agent.py confirm']);
+const needs=[['表达目标','“给妈妈转200元，不能影响房租”'],['核对条件','支付、反诈、财务按同次快照检查；缺口交由本人选择'],['确认与认证','展示对象、金额和作用范围；按三色要求核对后提交'],['跟进结果','工具回执给出事实；受阻保留原任务，未知查询原请求']];
 needs.forEach(([a,b],i)=>{const y=180+i*108;text(String(i+1).padStart(2,'0'),65,y,80,55,40,C.blue,true);text(a,170,y,1020,38,29,C.ink,true);text(b,170,y+43,1020,45,24,C.muted);if(i<3)line(170,y+95,1030);});
 slide('六领域接入与平台统一执行','02 整体方案','六领域均已接入；成员订阅与卡片增强和语音审计修复已集成。来源冲突保留给平台和人工核对。',['app/domain_agent_registry.py','app/supervisor.py','app/domain_agent_contract.py']);
 node('输入与理解','文字 / OCR草稿 / 可选语音',58,190,350,95);node('可信业务计划','规则 / 受限模型，实体由平台核验',465,190,350,95);node('安全执行链','Policy → 确认/认证 → DAG → 工具',872,190,350,95);arrow(417,215);arrow(824,215);
-const domains=['支付与交易','反诈风控','财务健康','家庭授权','订阅治理','卡片管理'];domains.forEach((a,i)=>{const x=58+(i%3)*407,y=335+Math.floor(i/3)*94;rect(x,y,350,72,C.pale);text(a,x+18,y+20,315,38,26,C.ink,true);});
-text('Supervisor：上下文绑定 → 平台快照比对 → 冲突保留 → 原执行链',58,553,1164,48,29,C.blue,true);small('领域Finding/Proposal只能提供事实与建议，不能决定权限或直接调用资金工具');
-slide('本地RAG：先核验阅读权，再给出引用','03 关键机制','512维BGE向量与独立cross-encoder；120题是合成集，修订后120/120，混合降级仍4失败，不称独立未见或真人效果。',['app/knowledge_service.py','app/local_embeddings.py','app/local_reranker.py','docs/assets/RAG修订验收.json']);
+const domains=[['支付与交易','六维预检、缺项与步骤建议'],['反诈风控','既有风险信号与保护建议'],['财务健康','预算、账本口径与覆盖范围'],['家庭授权','关系、同意与本人核验'],['订阅治理','扣费、服务与退款分层'],['卡片管理','目标卡片、状态与操作核对']];domains.forEach(([a,b],i)=>{const x=58+(i%3)*407,y=335+Math.floor(i/3)*94;rect(x,y,350,72,C.pale);text(a,x+18,y+7,315,34,26,C.ink,true);text(b,x+18,y+45,315,23,17,C.muted);});
+text('Supervisor：上下文绑定 → 平台快照比对 → 冲突保留 → 原执行链',58,553,1164,48,29,C.blue,true);small('确定性领域代理按任务路由；普通转账三域协作，其他领域按业务接入；权限由平台裁决');
+slide('本地RAG：先核验阅读权，再给出引用','03 关键机制','512维BGE向量与独立cross-encoder；固定120题三模式均120/120；成功答复与原文引用严格核验，属于开发回归，不称独立未见或真人效果。',['app/knowledge_service.py','app/local_embeddings.py','app/local_reranker.py','docs/assets/评审修订RAG验收.json']);
 node('权限过滤','owner / readers / 显式家庭共享',58,185,350,92);node('本机混合召回','词项 + 512维向量，可禁网重建',465,185,350,92);node('独立重排与引用','有限候选/低分拒答，答复前复核',872,185,350,92);arrow(417,207);arrow(824,207);
 await image('11-rag.png',670,300,548,320,'当前本机知识问答及引用界面');
-[['关键词',113],['混合检索',116],['独立重排',120]].forEach(([label,n],i)=>{const y=342+i*86;text(label,60,y,170,34,25,C.ink,true);rect(230,y+5,330*n/120,21,i===2?C.green:C.blue);text(`${n}/120`,568,y,112,34,23,C.ink,true);});
-small('合成题集保持不变，三模式均无新增退步；混合仍4失败，真人待测');
+[['关键词',ragEvidence.summaries.lexical.correct],['混合检索',ragEvidence.summaries.hybrid.correct],['独立重排',ragEvidence.summaries.reranked.correct]].forEach(([label,n],i)=>{const y=342+i*86;text(label,60,y,170,34,25,C.ink,true);rect(230,y+5,330*n/120,21,i===2?C.green:C.blue);text(`${n}/120`,568,y,112,34,23,C.ink,true);});
+small('固定120题三模式均严格通过；自然问法和真实用户效果单独验证');
 slide('OCR与语音先核对，只进入普通草稿','03 关键机制','图片/音频数据不直接授权交易；固定短句真实麦克风/ASR为此前单独验收，不称本片真实录音。',['app/ocr_service.py','app/speech_adapter.py','docs/P05音频证据与生命周期.md']);
 await image('12-ocr.png',58,174,590,440,'本地OCR位置、置信度和人工核对界面');
 text('OCR：本机识别 → 字段核对 → 草稿',688,190,525,82,28,C.ink,true);text('位置与置信度可见\n低置信度/冲突须确认\n金额在平台采用整数分',688,300,525,150,25,C.muted);
@@ -71,24 +73,24 @@ await image('15-dispute.png',58,237,560,330,'当前界面的交易异议和本�
 await image('16-funding.png',660,237,560,330,'当前界面的期限、保留额、不借款和资金缺口');
 text('B 交易事实 / 用户主张 / 本地工单分开',58,587,560,36,23,C.ink,true);text('C 当前可用资金 / 期限 / 缺口可核对',660,587,560,36,23,C.ink,true);
 small('B/C通过任务面板办理；自由对话建单未实现，银行正式案件号和退款仍待核实');
-slide('回归与冻结压测分别给出证据','04 验证结果','当前源码互补回归以提交日源码验收记录为准；表中负载为N15冻结环境实测，非生产或真人证明。',['docs/assets/银伴更名源码验收.json','docs/assets/P10性能压测验收.json','docs/assets/最终交付验收.json']);
-const values=[['验证组','实测结果','解释边界'],['提交日互补回归',`${fullTests}项通过`,'0跳过 / 0 ResourceWarning'],['三原型固定矩阵','12/12达预期','合成Mock，真人0样本'],['N15历史持续负载组','600次 / 301.51秒','本地闭环，非生产容量'],['P95 / 资金正确性','708ms / 重复扣款0','逐笔241分与审计一致']];
+slide('回归、检索与业务负载分别验证','04 验证结果','当前回归按本轮源码指纹核验；负载保留2026-10-31冻结本机环境，不冒称本轮重压测。',['docs/assets/评审修订源码验收.json','docs/assets/评审修订RAG验收.json','docs/原型评测与真人验收.md']);
+const values=[['验证组','实测结果','证据范围'],['当前源码互补回归',`${fullTests}项通过`,'0跳过 / 0 ResourceWarning'],['三原型固定矩阵','12/12达预期','既有合成Mock，真人未测'],['本机持续负载（10月31日）','600次 / 301.51秒','冻结环境，保留原分母'],['P95 / 资金正确性','708ms / 重复扣款0','原负载逐笔账务与审计核对']];
 const table=s.tables.add({rows:5,columns:3,left:58,top:183,width:1164,height:340,columnWidths:[360,365,439],values});
 table.borders.assign({style:'solid',fill:C.line,width:1});for(let r=0;r<5;r++)for(let c=0;c<3;c++){const cell=table.getCell(r,c);cell.fill=r===0?C.pale:C.white;cell.text.style={typeface:FONT,fontSize:23,bold:r===0,color:C.ink,insets:12,verticalAlignment:'top'};}
-text('原型8并发 P95 4203ms；RAG重排120/120',58,560,1164,44,29,C.ink,true);small('本轮未调用付费API；固定合成题非盲测，词法113/120、融合116/120');
+text('本机原型8并发 P95 4203ms；检索回归单独记账',58,560,1164,44,29,C.ink,true);small('120题含88个检索正例与32个拒答例；成功答复及引用纳入核验；真实用户效果另测');
 slide('当前源码、公开仓库与离线边界','04 交付与边界','默认源码已在干净Python环境验证；完整AI离线镜像与历史运行包分开标识，源码不携带模型和宿主环境。',['scripts/source_release.py','scripts/offline_release.py','docs/assets/最终交付验收.json']);
 ['获取审核源码','核对SHA清单','按说明启动','核对演示结果'].forEach((a,i)=>{node(a,i===0?'公开仓库 / 最终源码ZIP':i===1?'源码与材料分别校验':i===2?'默认Python / 可选镜像':'Mock资金与可验证回执',58+i*302,195,255,105);if(i<3)arrow(321+i*302,222,36);});
-const modes=[['默认源码','标准库Mock；AI模块需另配本地资产'],['自建身份','密码＋TOTP，无预置种子'],['独立开源核心','Fineract + PostgreSQL，虚构资金']];modes.forEach(([a,b],i)=>{const y=351+i*77;text(a,63,y,260,40,27,C.ink,true);text(b,360,y,850,42,26,C.muted);line(58,y+58,1164);});small('当前更名源码以本地回归核验；远端CI与完整AI镜像分别记录');
-slide('业务界面与演示流程','04 演示','在此页另播当前MP4。视频为自动浏览器的真实本机界面与模型，不作为真人操作证明；播放不计入本页10秒口述预算。',['scripts/record_competition_demo.mjs',path.relative(root,path.join(record,'recording/report.json'))]);
-await image('03-yellow.png',58,174,740,450,'本次实录的原计划确认卡');text('按顺序看五件事',840,192,360,45,30,C.ink,true);text('先补齐再确认\n认证不等于扣款\nRAG有引用\nOCR只填草稿\n自建坐席不改账',840,274,360,255,28,C.muted);small('本页为当前界面实测截图；可选视频不计入本次必交材料');
-slide('当前成果与后续工作','04 总结','不把未完成项改为通过：人工作业/外部环境/任意跨业务DAG和生产认证分别排期。当前交付以最终发行索引和收件记录为准。',['docs/验收摘要.json known_unverified','docs/五人团队Agent接入契约.md']);
-const conclusions=[['本地已验','六领域与平台权限链\n订阅确认与状态读取隔离\n本地RAG/重排/OCR\n固定矩阵与当前负载'],['仍待真人','自建双端人工操作\n独立TOTP与真实读屏\n真实问法/图片/语音\n物理第二台与实际汇报计时'],['仍待外部与扩展','持牌银行与官方IM\n生产认证/硬件证明\n任意跨业务/生产并行\n完整云端与生产容量']];
-conclusions.forEach(([a,b],i)=>{const x=58+i*407;text(a,x,205,350,48,31,C.ink,true);rect(x,266,350,3,i===0?C.green:C.blue);text(b,x,300,350,240,26,C.muted);});small('让请求更易表达，让权限、过程与事实都可核对',624,C.blue);
+const modes=[['默认源码','标准库Mock；AI模块需另配本地资产'],['自建身份','密码＋TOTP，无预置种子'],['独立开源核心','Fineract + PostgreSQL，虚构资金']];modes.forEach(([a,b],i)=>{const y=351+i*77;text(a,63,y,260,40,27,C.ink,true);text(b,360,y,850,42,26,C.muted);line(58,y+58,1164);});small('当前修订源码以本地回归核验；远端CI与完整AI镜像分别记录');
+slide('业务界面与演示流程','04 演示','复用2026-11-01实际本机截图，本轮未重录。可选MP4为260.8秒；若现场播放须计入总时长，不把自动浏览器录制称为真人验收。',['scripts/record_competition_demo.mjs',path.relative(root,path.join(record,'recording/report.json'))]);
+await image('03-yellow.png',58,174,740,450,'2026-11-01实录的原计划确认卡');text('按顺序看五件事',840,192,360,45,30,C.ink,true);text('先补齐再确认\n认证不等于扣款\nRAG有引用\nOCR只填草稿\n自建坐席不改账',840,274,360,255,28,C.muted);small('11月1日本机实测截图；可选视频260.8秒，现场播放需计入总汇报时间');
+slide('让银行任务可解释、可控制、可追溯','04 总结','原型已验证能力与原型适用范围集中说明；真人、生产、完整AI异机等未验项保留在安全自评与交付索引。',['docs/assets/评审修订源码验收.json','docs/安全自评报告.md','docs/部署说明.md']);
+const conclusions=[['任务可解释','六领域按需分析\n预检展示预算与缺项\n本地检索提供原文引用\nOCR核对后填入草稿'],['执行可控制','平台独占权限裁决\n确认与认证绑定本次操作\n未知结果查询原请求\n中断恢复保留原任务'],['过程可追溯','工具事实生成逐项回执\nDAG与审计同事务落盘\n本地坐席承接核实责任\n源码与材料按指纹交接']];
+conclusions.forEach(([a,b],i)=>{const x=58+i*407;text(a,x,205,350,48,31,C.ink,true);rect(x,266,350,3,i===0?C.green:C.blue);text(b,x,300,350,240,26,C.muted);});small('适用范围：本地竞赛原型与虚构资金；真人效果、生产接入与完整AI异机验收另列安全自评',624,C.muted);
 const candidate=path.join(work,'candidate.pptx');await(await PresentationFile.exportPptx(p)).save(candidate);
 const final=path.join(record,'output-'+(process.env.DECK_REVISION||'r1'),'final.pptx');await fs.mkdir(path.dirname(final),{recursive:true});
 await finalizePresentation({workspaceDir:root,candidatePath:candidate,finalPath:final,pythonExecutable:python,integrityValidatorPath:path.join(skill,'container_tools/inspect_presentation_package_integrity.py'),layoutValidatorPath:path.join(skill,'container_tools/inspect_presentation_layout_geometry.py'),layoutArgs:['--expected-slide-size-emu','12192000,6858000','--validate-bullet-geometry','--validate-heading-fit','--require-native-table-slide','9'],explicitTotalSlideCount:12,requiredNativeTableOwnerSlides:[9],requiredNativeChartOwnerSlides:[],fontPolicy:{basis:'design',families:[FONT]},verifyArtifactToolImport:true,receiptPath:path.join(work,'validation.json')});
 const finalDeck=await PresentationFile.importPptx(await FileBlob.load(final));for(let i=0;i<finalDeck.slides.items.length;i++){const png=await finalDeck.export({slide:finalDeck.slides.items[i],format:'png',scale:1});await fs.writeFile(path.join(work,`slide-${String(i+1).padStart(2,'0')}.png`),new Uint8Array(await png.arrayBuffer()));}
-const talk=timings.reduce((a,b)=>a+b,0),budget=talk+recording.video.duration_seconds;if(budget>600)throw Error('Planned talk plus measured video exceeds 10 minutes');
-await fs.writeFile(path.join(work,'timing.json'),JSON.stringify({slides:timings,planned_talk_seconds:talk,actual_video_seconds:recording.video.duration_seconds,combined_planned_seconds:budget,human_rehearsal_measured:false,speech_characters:lectures.map(x=>x.replace(/\s/g,'').length),estimated_speech_seconds_at_180_cpm:lectures.reduce((a,x)=>a+x.replace(/\s/g,'').length,0)/3},null,2));
+const talk=timings.reduce((a,b)=>a+b,0),optionalBudget=talk+recording.video.duration_seconds;if(optionalBudget>600)throw Error('Planned talk plus measured optional video exceeds 10 minutes');
+await fs.writeFile(path.join(work,'timing.json'),JSON.stringify({slides:timings,planned_talk_seconds:talk,actual_video_seconds:recording.video.duration_seconds,video_included_in_planned_talk:false,combined_planned_seconds:talk,combined_with_optional_video_seconds:optionalBudget,human_rehearsal_measured:false,speech_characters:lectures.map(x=>x.replace(/\s/g,'').length),estimated_speech_seconds_at_180_cpm:lectures.reduce((a,x)=>a+x.replace(/\s/g,'').length,0)/3},null,2));
 await fs.writeFile(path.join(work,'reference.json'),JSON.stringify({source:reference?'explicit local reference file':'user-provided reference previously reviewed',sha256:reference?createHash('sha256').update(await fs.readFile(reference)).digest('hex'):referenceSha,usage:'visual inspiration: blue header/white technical pages, section organization, workflow/algorithm evidence; no source team/logo/metrics copied',reference_pages_rendered:24},null,2));
 await fs.copyFile(final,path.join(root,'submission/银伴——银行智能服务助手_答辩_v2.pptx'));console.log('DECK COMPLETE',final);

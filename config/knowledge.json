@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "project-boundary-clarification-20261031",
+  "version": "project-boundary-clarification-20261102",
   "documents": [
     {
       "id": "three_color",
@@ -160,14 +160,14 @@
     },
     {
       "kind": "product_fact",
-      "version": "snapshot-2026-10-23",
+      "version": "snapshot-2026-11-02",
       "reviewed": true,
       "access": "public",
       "readers": [],
-      "valid_until": "2026-11-02",
+      "valid_until": "2026-11-12",
       "embedding_allowed": true,
       "publisher": "中国银行",
-      "retrieved_at": "2026-10-23",
+      "retrieved_at": "2026-11-02",
       "id": "boc_fixed_deposit",
       "title": "中国银行整存整取公开产品资料",
       "patterns": [
@@ -181,14 +181,14 @@
     },
     {
       "kind": "product_fact",
-      "version": "snapshot-2026-10-23",
+      "version": "snapshot-2026-11-02",
       "reviewed": true,
       "access": "public",
       "readers": [],
-      "valid_until": "2026-11-02",
+      "valid_until": "2026-11-12",
       "embedding_allowed": true,
       "publisher": "中国银行",
-      "retrieved_at": "2026-10-23",
+      "retrieved_at": "2026-11-02",
       "id": "boc_deposit_account",
       "title": "中国银行定期一本通公开产品资料",
       "patterns": [

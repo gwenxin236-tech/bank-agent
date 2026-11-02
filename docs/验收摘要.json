@@ -1,26 +1,25 @@
 {
   "schema": 3,
   "project_name": "银伴——银行智能服务助手",
-  "status": "PASS_LOCAL_RENAME_974",
-  "current_source_evidence": "docs/assets/银伴更名源码验收.json",
-  "current_material_evidence": "docs/assets/银伴更名材料验收.json",
+  "status": "PASS_LOCAL_REVIEW_REVISION_988",
+  "current_source_evidence": "docs/assets/评审修订源码验收.json",
+  "current_material_evidence": "docs/assets/评审修订材料验收.json",
   "publication": {
-    "current_rename_published": false,
     "repository_url": "https://github.com/gwenxin236-tech/bank-agent",
-    "previous_public_commit": "ad8b409a507519f549bc34d5d594e3a2ac50d34d",
-    "previous_ci_is_historical": true,
-    "status_recorded_before_new_publication": true
+    "last_published_commit": "a54b2a465b082eed0ff1204919d5ddaed3ce4584",
+    "current_revision_published": false,
+    "current_revision_remote_ci": "NOT_RUN",
+    "record_scope": "snapshot packaging state; publication and same-commit CI are bound by the external release index"
   },
   "known_unverified": [
     "human rehearsal",
-    "native PowerPoint/WPS playback",
     "physical second computer/offline complete-AI profile",
     "competition portal receipt",
     "real screen reader, independent authenticator and human customer support operation",
     "real user RAG/OCR/ASR corpus; fixed synthetic reranker120/120 is not real user proof",
-    "complete AI standard/identity/Fineract images not rebuilt",
     "licensed bank, official IM/support and production IAM",
-    "arbitrary cross-business DAG, offline ASR and provider deletion receipt"
+    "arbitrary cross-business DAG, offline ASR and provider deletion receipt",
+    "human native-slideshow timing and audio/visual review; native automation is separate"
   ],
   "pre_rename_history": {
     "historical_only": true,
@@ -2190,9 +2189,29 @@
       }
     }
   },
-  "tests_run": 974,
-  "core_tests": 948,
+  "tests_run": 988,
+  "core_tests": 962,
   "browser_tests": 26,
   "skipped": 0,
-  "resource_warnings": 0
+  "resource_warnings": 0,
+  "previous_material_basis": {
+    "source_evidence": "docs/assets/银伴更名源码验收.json",
+    "material_evidence": "docs/assets/银伴更名材料验收.json",
+    "status": "PASS_LOCAL_RENAME_974",
+    "historical_only": true
+  },
+  "failures": 0,
+  "errors": 0,
+  "current_rag_evidence": "docs/assets/评审修订RAG验收.json",
+  "human_testing_guide": "docs/真人测试与异机验收.md",
+  "fixed_120": {
+    "lexical": 120,
+    "hybrid": 120,
+    "reranked": 120,
+    "real_user_samples": 0,
+    "cases_unchanged": true
+  },
+  "current_offline_evidence": "docs/assets/评审修订源码验收.json",
+  "same_host_migration_verified": true,
+  "physical_second_host_verified": false
 }

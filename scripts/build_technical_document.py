@@ -61,7 +61,7 @@ SOURCES = {
  'S22': ('app/llm_adapter.py', 'class LLMConfig:', '可选模型受限输出与文本外发边界'),
  'S23': ('app/static/app.js', 'function renderCardDisplay()', '显示设置、隐藏/恢复、新轮求助与前端交互'),
  'S24': ('docs/E7B适老化验收.md', '## 5.', '真实读屏仍需人工走查；语音实现app/speech_adapter.py'),
- 'S25': ('docs/assets/银伴更名源码验收.json', '"current_full_windows":', '提交日互补分组回归；默认容器与完整AI镜像分开'),
+ 'S25': ('docs/assets/评审修订源码验收.json', '"current_full_windows":', '本轮互补回归与源码指纹；默认容器与完整AI镜像分开'),
  'S26': ('docs/E6边界测试矩阵.md', '## T01-T25', '正常/异常测试映射；tests/含各专项实现'),
  'S27': ('docs/需求追踪矩阵.md', '## L2', '官方交付要求、分层与未验收项'),
  'S28': ('README.md', '#', '运行方式、功能演示与工程边界'),
@@ -97,11 +97,11 @@ SOURCES = {
  'S58': ('app/live_support.py', 'class LiveSupport:', '自建用户/坐席消息、回执与角色隔离'),
  'S59': ('app/identity_service.py', 'class IdentityService:', '本地密码、TOTP、持久会话和撤销'),
  'S60': ('docs/assets/P10性能压测验收.json', '"status": "PASS_P10_LOCAL_SCOPE_EXTERNAL_LOAD_UNMEASURED"', '冻结本机压测、资源、资金正确性和阈值'),
- 'S61': ('docs/P03RAG知识库与验收.md', '### **10.2', '修订同题113/116/120、降级与真人评测边界'),
+ 'S61': ('docs/P03RAG知识库与验收.md', '### **11.1', '固定120题三模式严格通过与真人评测边界'),
  'S62': ('docs/P05音频证据与生命周期.md', '### **1.1', '录音同意、云ASR固定短句及供应商删除边界'),
  'S63': ('scripts/ci_verify.py', 'def acceptable(', 'CI零跳过/资源警告、隔离数据库和分组'),
  'S64': ('scripts/source_release.py', 'def build(', '当前工作区确定性源码快照与白名单'),
- 'S65': ('docs/assets/RAG修订验收.json', '"status": "PASS_LOCAL_RAG_AND_FULL_REGRESSION"', '保留旧题标签与阈值的三模式修订实测'),
+ 'S65': ('docs/assets/评审修订RAG验收.json', '"status": "PASS_LOCAL_STRICT_THREE_MODES_120"', '固定题目与标签、严格答复和原文引用三模式实测'),
  'S66': ('docs/assets/DAG真实模型验收.json', '"status": "PASS_REAL_MODEL_DAG_BOUNDED"', '两次真实模型DAG，首次拒绝及第二次原图确认'),
  'S67': ('docs/最终推进清单.md', '# 最终推进清单', '最终执行顺序、团队交接及人工/外部待办'),
  'S68': ('app/service_tasks.py', 'class ServiceTasks:', '交易异议、资金准备与本地交接，不是银行案件或退款'),
@@ -246,7 +246,7 @@ def markup(text, emphasis=True):
 
 
 def build(source, output, records, font_dir):
-    material_evidence(ROOT, json.loads((ROOT/'docs/assets/银伴更名源码验收.json').read_text(encoding='utf-8')))
+    material_evidence(ROOT, json.loads((ROOT/'docs/assets/评审修订源码验收.json').read_text(encoding='utf-8')))
     fonts(font_dir)
     text=source.read_text(encoding='utf-8')
     rows=source_records()
@@ -292,7 +292,6 @@ def build(source, output, records, font_dir):
         c.saveState();c.setFont('Body',8);c.setFillColor(colors.HexColor('#64756f'))
         c.drawString(margin,22,'银伴——银行智能服务助手 · 技术文档')
         c.drawCentredString(width/2,22,str(d.page-d.body_start))
-        c.drawRightString(width-margin,22,'竞赛离线 Mock 实现')
         c.restoreState()
     frame=Frame(margin,43,content_width,height-87,leftPadding=0,rightPadding=0,topPadding=0,bottomPadding=0)
     doc.addPageTemplates(PageTemplate(id='technical',frames=frame,onPageEnd=footer))

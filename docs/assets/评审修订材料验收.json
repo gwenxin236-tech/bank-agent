@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "project_name": "银伴——银行智能服务助手",
+  "date": "2026-11-02",
+  "status": "PASS_LOCAL_STRICT_RAG_RUNTIME_AND_MATERIALS",
+  "source_evidence": "docs/assets/评审修订源码验收.json",
+  "source_evidence_sha256": "bac089b5a75a80ee3d6ffe27c72921f926b0e2ac010bc3ea87e057354b567fea",
+  "regression": {
+    "status": "PASS",
+    "tests": 988,
+    "core": 962,
+    "browser": 26,
+    "method": "complementary partitions; disjoint IDs and full discovery checked",
+    "skipped": 0,
+    "resource_warnings": 0,
+    "failures": 0,
+    "errors": 0,
+    "record": "data/verification/rag-allmodes-20261102/r5"
+  },
+  "introduction_characters": 184,
+  "technical": {
+    "path": "submission/银伴——银行智能服务助手_技术文档.pdf",
+    "pages": 63,
+    "bytes": 1672304,
+    "sha256": "b11a7e4d848ab1f24898587c1a6c96d68ae5d976a1681ee4c92abb66062e6500",
+    "references": 74
+  },
+  "security": {
+    "path": "submission/银伴——银行智能服务助手_安全自评报告.pdf",
+    "pages": 5,
+    "bytes": 223548,
+    "sha256": "5bf75e8949c450dbe7215b826e6aa156ff74d66960aee96fd4f70d789dceaa10"
+  },
+  "presentation": {
+    "path": "submission/银伴——银行智能服务助手_答辩_v2.pptx",
+    "slides": 12,
+    "sha256": "856f6c474778c0b166fae3a1d86f46faa332b139dd88e2a60623f68e44b76c2d",
+    "planned_talk_seconds": 290,
+    "speech_estimate_seconds_at_180_cpm": 261,
+    "native_open_and_export": true,
+    "native_visual_sample_reviewed": true,
+    "human_timing_measured": false
+  },
+  "video": {
+    "path": "submission/银伴——银行智能服务助手_演示.mp4",
+    "seconds": 260.8,
+    "sha256": "4a547727ab9e8189416c5c55e9ab6623ef856aa16e3661eb40d6710d5ac8e61a",
+    "unchanged_in_batch": true,
+    "native_full_playback_muted": true,
+    "human_audio_visual_checked": false
+  },
+  "rag_evidence": "docs/assets/评审修订RAG验收.json",
+  "docker_image": {
+    "tag": "bank-agent-offline:rag-20261102-r3",
+    "id": "sha256:d687708b9b7c6c45562066c1a39a217f956d2b59a1599acfa8500e842025f781"
+  },
+  "same_host_copy_import_verified": true,
+  "physical_second_host_verified": false,
+  "cloud_calls": 0,
+  "new_dependencies": false,
+  "publication_state": "packaged before current snapshot publication; see external release index",
+  "portal_uploaded": false
+}

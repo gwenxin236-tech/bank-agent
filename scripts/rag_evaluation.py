@@ -87,7 +87,13 @@ def evaluate(dataset,modes=('lexical','hybrid','reranked'),user_study=None,sourc
             finally:service.search=original
             ids=list(dict.fromkeys(c.document_id for c in captured))[:3]
             status=answer['status'];kind=case['type']
-            ok=(bool(ids) and ids[0] in case['relevant_ids']) if kind=='answerable' else status in {
+            citations=answer.get('citations',[])
+            grounded=(isinstance(citations,list) and bool(citations) and all(isinstance(c,dict) and
+                any(c.get('document_id')==hit.document_id and c.get('chunk_id')==hit.chunk_id and
+                    c.get('quote')==hit.text for hit in captured) for c in citations))
+            ok=(status=='ANSWERED' and isinstance(answer.get('answer'),str) and bool(answer['answer'].strip()) and
+                bool(ids) and ids[0] in case['relevant_ids'] and grounded and
+                any(c['document_id'] in case['relevant_ids'] for c in citations)) if kind=='answerable' else status in {
                 'uncovered':{'NO_EVIDENCE'},'out_of_scope':{'OUT_OF_SCOPE'},'unsafe':{'OUT_OF_SCOPE'},'private':{'INVALID_QUERY'}}[kind]
             rerank=answer.get('retrieval',{}).get('rerank',{});accepted+=bool(rerank.get('applied'))
             rows.append({'id':case['id'],'split':case['split'],'type':kind,'question':case['question'],'expected':case['relevant_ids'],
@@ -97,7 +103,7 @@ def evaluate(dataset,modes=('lexical','hybrid','reranked'),user_study=None,sourc
     return report
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--dataset',type=Path,default=ROOT/'eval/rag_eval_v3.json')
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--dataset',type=Path,default=ROOT/'eval/rag_eval_v4.json')
     p.add_argument('--source',type=Path,help='explicit version-bound corpus, including eval/knowledge_p03_v2.json for historical v2')
     p.add_argument('--user-study',type=Path);p.add_argument('--output',type=Path,required=True);p.add_argument('--modes',nargs='+',choices=['lexical','hybrid','reranked'],default=['lexical','hybrid','reranked'])
     a=p.parse_args();output=a.output.resolve();output.relative_to(ROOT/'data/verification')

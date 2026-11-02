@@ -124,7 +124,10 @@ class KnowledgeTests(unittest.TestCase):
         old=json.loads((ROOT/'eval/rag_eval_v2.json').read_text(encoding='utf-8'))
         new=json.loads((ROOT/'eval/rag_eval_v3.json').read_text(encoding='utf-8'))
         self.assertEqual(old['cases'],new['cases'])
-        self.assertEqual(new['source_sha256'],hashlib.sha256((ROOT/'config/knowledge.json').read_bytes()).hexdigest())
+        self.assertEqual(new['source_sha256'],hashlib.sha256((ROOT/'eval/knowledge_p03_v3.json').read_bytes()).hexdigest())
+        current=json.loads((ROOT/'eval/rag_eval_v4.json').read_text(encoding='utf-8'))
+        self.assertEqual(old['cases'],current['cases'])
+        self.assertEqual(current['source_sha256'],hashlib.sha256((ROOT/'config/knowledge.json').read_bytes()).hexdigest())
 
     def test_permission_filter_happens_before_ranking_and_no_cross_user_cache(self):
         private = card('private', access='restricted', readers=['alice'], title='专属说明',
@@ -355,7 +358,7 @@ class RagMainChainTests(unittest.TestCase):
             self.assertTrue(official)
             self.assertEqual(official[0]['publisher'],'中国银行')
             self.assertTrue(official[0]['source_url'].startswith('https://www.boc.cn/'))
-            self.assertEqual(official[0]['retrieved_at'],'2026-10-23')
+            self.assertEqual(official[0]['retrieved_at'],'2026-11-02')
             self.assertEqual(len(official[0]['source_excerpt_sha256']),64)
 
     def family_documents(self):

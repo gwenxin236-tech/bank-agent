@@ -1,7 +1,7 @@
 """可选的大模型结构化意图适配器。
 
 安全边界：
-- 默认不启用，未配置 API Key 时返回 None，由规则解析器兜底；
+- 默认离线；仅 BANK_AGENT_OFFLINE=0 且配置完整时启用，由规则解析器兜底；
 - 大模型只负责意图识别和实体抽取，不获得银行工具权限；
 - 输出必须是受限 JSON，且仍由服务端 PolicyEngine 重新计算风险；
 - 仅发送用户文本，不附带账户查询结果；仅限虚构演示，真实文本外发需另行脱敏审查。
@@ -91,7 +91,7 @@ class LLMConfig:
             model=os.getenv("LLM_MODEL", os.getenv("OPENAI_MODEL", "")).strip(),
             base_url=os.getenv("LLM_BASE_URL", os.getenv("OPENAI_BASE_URL", default_base)).strip().rstrip("/"),
             timeout_seconds=timeout, config_error=error,
-            offline=os.getenv("BANK_AGENT_OFFLINE", "0") == "1", **limits,
+            offline=os.getenv("BANK_AGENT_OFFLINE", "1") != "0", **limits,
         )
 
     @property

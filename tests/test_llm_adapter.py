@@ -20,6 +20,44 @@ from llm_adapter import LLMConfig, LLMIntentAdapter
 
 
 class LLMAdapterTests(unittest.TestCase):
+    def test_environment_requires_explicit_online_choice_even_with_credentials(self):
+        inherited = {'LLM_API_KEY': 'fixture-secret', 'LLM_MODEL': 'fixture-model'}
+        for choice in (None, '1', '', 'unexpected'):
+            with self.subTest(choice=choice), patch.dict(os.environ, inherited, clear=True):
+                if choice is not None:
+                    os.environ['BANK_AGENT_OFFLINE'] = choice
+                adapter = LLMIntentAdapter(LLMConfig.from_env())
+                with patch('llm_adapter._open_request') as network:
+                    self.assertIsNone(adapter.parse('查询余额'))
+                network.assert_not_called()
+                self.assertTrue(adapter.config.offline)
+                self.assertEqual(adapter.evidence['reason'], 'offline')
+
+    def test_explicit_online_choice_uses_only_the_mocked_transport(self):
+        with patch.dict(os.environ, {'LLM_API_KEY': 'fixture-secret', 'LLM_MODEL': 'fixture-model',
+                                    'BANK_AGENT_OFFLINE': '0'}, clear=True):
+            adapter = LLMIntentAdapter(LLMConfig.from_env())
+        with patch('llm_adapter._open_request', return_value=model_response()) as network:
+            self.assertEqual(adapter.parse('查询余额'), ('balance_query', {
+                'beneficiary': None, 'amount_cents': None, 'note': '', 'subscription_id': None,
+                'action': None, 'goal_name': None, 'target_cents': None, 'monthly_cents': None,
+                'member': None, 'allowance_cents': None, 'participants': []}))
+        network.assert_called_once()
+
+    def test_http_entry_defaults_offline_without_importing_the_service(self):
+        import ast
+        module = ast.parse((ROOT / 'app/banking_agent.py').read_text(encoding='utf-8'))
+        assignment = next(node for node in module.body if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == 'runtime' for target in node.targets))
+        class FakeRuntime:
+            def __init__(self, **kwargs): self.offline = kwargs['offline']
+        for choice, expected in ((None, True), ('1', True), ('0', False), ('', True), ('invalid', True)):
+            with self.subTest(choice=choice), patch.dict(os.environ, {}, clear=True):
+                if choice is not None: os.environ['BANK_AGENT_OFFLINE'] = choice
+                value = eval(compile(ast.Expression(assignment.value), '<runtime-entry>', 'eval'),
+                             {'AgentRuntime': FakeRuntime, 'os': os})
+                self.assertIs(value.offline, expected)
+
     def test_disabled_without_credentials(self):
         adapter = LLMIntentAdapter(LLMConfig())
         self.assertFalse(adapter.config.enabled)
@@ -54,7 +92,7 @@ class LLMRobustnessTests(unittest.TestCase):
         for timeout in ('abc', '', 'nan', 'inf', '-1', '0', '9999999999999999999999'):
             with self.subTest(timeout=timeout), patch.dict(os.environ, {
                     'LLM_API_KEY': 'fixture-secret', 'LLM_MODEL': 'fixture-model',
-                    'LLM_TIMEOUT_SECONDS': timeout}, clear=True):
+                    'LLM_TIMEOUT_SECONDS': timeout, 'BANK_AGENT_OFFLINE': '0'}, clear=True):
                 config = LLMConfig.from_env()
                 self.assertFalse(config.enabled)
                 adapter = LLMIntentAdapter(config)
@@ -65,7 +103,8 @@ class LLMRobustnessTests(unittest.TestCase):
 
     def test_aliases_and_explicit_empty_key_precedence(self):
         with patch.dict(os.environ, {'OPENAI_API_KEY': 'alias-secret', 'OPENAI_MODEL': 'alias-model',
-                                     'OPENAI_BASE_URL': 'https://example.test/v1/', 'LLM_TIMEOUT_SECONDS': '2.5'}, clear=True):
+                                     'OPENAI_BASE_URL': 'https://example.test/v1/', 'LLM_TIMEOUT_SECONDS': '2.5',
+                                     'BANK_AGENT_OFFLINE': '0'}, clear=True):
             config = LLMConfig.from_env()
             self.assertTrue(config.enabled)
             self.assertEqual(config.timeout_seconds, 2.5)

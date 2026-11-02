@@ -231,10 +231,12 @@ def main():
             report['reranker_probe']=json.loads(probe)
             check('independent_local_reranker',True)
             evaluation=run('expanded-reranker-regression',['run','--rm','--pull','never','--network','none','--read-only','--tmpfs','/tmp',image,'python','-c',
-                "import sys,json,socket;sys.path[:0]=['app','scripts'];from pathlib import Path;from rag_evaluation import evaluate;socket.socket.connect=lambda *a,**k:(_ for _ in ()).throw(AssertionError('network forbidden'));r=evaluate(json.loads(Path('eval/rag_eval_v3.json').read_text()),['reranked']);print(json.dumps(r,ensure_ascii=False))"],timeout=240)
+                "import sys,json,socket;sys.path[:0]=['app','scripts'];from pathlib import Path;from rag_evaluation import evaluate;socket.socket.connect=lambda *a,**k:(_ for _ in ()).throw(AssertionError('network forbidden'));r=evaluate(json.loads(Path('eval/rag_eval_v4.json').read_text()));print(json.dumps(r,ensure_ascii=False))"],timeout=240)
             report['expanded_evaluation']=json.loads(evaluation)
-            summary=report['expanded_evaluation']['modes']['reranked']['summary']
-            check('expanded_synthetic_regression_targets',summary['count']==120 and summary['hit_at_1']>=.85 and summary['negative_refusal_rate']>=.9)
+            summaries=report['expanded_evaluation']['modes']
+            check('expanded_synthetic_regression_targets',set(summaries)=={'lexical','hybrid','reranked'} and
+                  all(v['summary']['count']==120 and v['summary']['correct']==120 and
+                      v['summary']['negative_refusal_rate']==1 for v in summaries.values()))
         if local_ocr:
             if not args.ocr_image:raise ValueError('local OCR acceptance requires --ocr-image synthetic fixture')
             import base64

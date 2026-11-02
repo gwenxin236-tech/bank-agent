@@ -4482,7 +4482,7 @@ class AgentRuntime(RecoveryMixin):
             return ToolResult(True, step.tool, {"status": "NEEDS_USER_INPUT"})
         return ToolResult(False, step.tool, error_code="UNKNOWN_TOOL", error_message="未注册的工具，已拒绝调用。")
 
-runtime = AgentRuntime(offline=os.getenv("BANK_AGENT_OFFLINE") == "1")
+runtime = AgentRuntime(offline=os.getenv("BANK_AGENT_OFFLINE", "1") != "0")
 gateway = AgentGateway(runtime)
 http_rate_limiter = SlidingWindowRateLimiter()
 MAX_BODY_BYTES = POLICY["http_max_body_bytes"]

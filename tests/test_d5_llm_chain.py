@@ -73,7 +73,7 @@ class LLMChainTests(unittest.TestCase):
 
     def test_bad_env_still_constructs_runtime_and_completes_rule_query(self):
         with patch.dict(os.environ, {'LLM_TIMEOUT_SECONDS': 'abc', 'LLM_API_KEY': 'fixture-secret',
-                                     'LLM_MODEL': 'fixture-model'}, clear=True):
+                                     'LLM_MODEL': 'fixture-model', 'BANK_AGENT_OFFLINE': '0'}, clear=True):
             runtime = ba.AgentRuntime(db_path=Path(self.tmp.name) / 'invalid.sqlite3')
         try:
             with patch('llm_adapter._open_request') as network:

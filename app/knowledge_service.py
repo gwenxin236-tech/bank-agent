@@ -149,8 +149,27 @@ def _normal(text):
                    if unicodedata.category(c) != 'Cf')
 
 
+# Retrieval-only domain vocabulary: never rewrite source quotes, permission checks,
+# negation or bank facts. These are terms, not evaluation-question/document routes.
+_ALIASES = {
+    '本息': ('本金和利息', '本金及利息', '本金与利息'),
+    '转账': ('付款', '支付', '打款'), '核验': ('校验',),
+    '反诈': ('诈骗', '防骗', '骗局'), '人工': ('客服', '坐席'),
+    '订阅': ('会员', '续费'), '扣款': ('扣费', '扣钱'),
+    '失效': ('停用',), '未知': ('尚未明确', '不确定', '未确定'),
+    '不足': ('没有足够', '不够', '缺少', '缺乏'),
+    '终态': ('最终状态', '最终结果'), '限额': ('额度', '上限'),
+}
+_QUERY_FILLERS = re.compile(
+    r'没有|请介绍|介绍|应以|哪个|为什么|能否|可以|能够|是否|应该|'
+    r'不需要|需要|目前|暂时|本期|时候|以后|仍然|仍需|还是|这样|什么|怎样|怎么')
+
+
 def _tokens(text):
-    text = _normal(text)
+    text = _QUERY_FILLERS.sub(' ', _normal(text))
+    for canonical, aliases in _ALIASES.items():
+        for alias in aliases:
+            text = text.replace(alias, canonical)
     result = set(re.findall(r'[a-z][a-z0-9_-]*', text))
     for word in re.findall(r'[\u4e00-\u9fff]+', text):
         result.update(word[i:i+2] for i in range(len(word)-1))
@@ -277,7 +296,7 @@ class KnowledgeService:
         self._chunks = tuple(chunks)
         index = defaultdict(set)
         for i, chunk in enumerate(self._chunks):
-            for token in _tokens(chunk.title + ' ' + chunk.text + ' ' + ' '.join(chunk.patterns)):
+            for token in _tokens(chunk.title + ' ' + chunk.text + ' ' + chunk.source_excerpt + ' ' + ' '.join(chunk.patterns)):
                 index[token].add(i)
         self._index = MappingProxyType({k: frozenset(v) for k, v in index.items()})
 
@@ -453,28 +472,38 @@ class KnowledgeService:
             semantic={}
         else:
             semantic=self._semantic(query,visible)
-        # Local small-model rankings also use rare terms from reviewed patterns.
-        # This is a general IDF weight, not a question/answer lookup table.
-        pattern_terms = {c.chunk_id:set().union(*(_tokens(p) for p in c.patterns)) for c in visible}
-        pattern_df=Counter(term for terms in pattern_terms.values() for term in terms)
+        # Document frequency is derived only from visible, unexpired chunks.
+        # Title/pattern bigrams share body IDF: a common word such as “结果”
+        # must not become rare merely because it appears in just one pattern.
+        body_terms = {c.chunk_id: _tokens(c.text+' '+c.title+' '+c.source_excerpt) for c in visible}
+        body_df = Counter(term for terms in body_terms.values() for term in terms)
+        idf = {term: math.log(1+(len(visible)-count+.5)/(count+.5))
+               for term, count in body_df.items()}
         local_vector = self.retrieval_evidence['mode'] == 'local_vector'
-        ranked = []
-        lexical_scores={}
+        ranked, lexical_scores = [], {}
         candidates.update(i for i,c in enumerate(self._chunks) if c.chunk_id in semantic)
         for i in candidates:
             chunk = self._chunks[i]
-            # ACL and expiry precede scoring/top-k; no shared answer cache.
             if chunk.valid_until < today or not self._visible(chunk,scope):
                 continue
-            matches = len(tokens & _tokens(chunk.text+' '+chunk.title))
-            pattern_score = sum(30 for p in chunk.patterns if _normal(p) in _normal(query))
-            literal_match = bool(pattern_score or matches>=2)
-            if local_vector:
-                pattern_score += sum(4*math.log((1+len(visible))/(1+pattern_df[term]))
-                                     for term in tokens & pattern_terms.get(chunk.chunk_id,set()))
-            if literal_match or chunk.chunk_id in semantic:
-                if literal_match:lexical_scores[chunk.chunk_id]=pattern_score+matches
-                ranked.append((pattern_score+matches+int(semantic.get(chunk.chunk_id,0)*40),chunk))
+            shared = tokens & body_terms[chunk.chunk_id]
+            patterns = set().union(*(_tokens(p) for p in chunk.patterns))
+            title_terms = _tokens(chunk.title)
+            exact = sum(5 for p in chunk.patterns if _normal(p) in _normal(query))
+            lexical_match = bool(exact or len(shared) >= 2)
+            # A weak semantic coincidence alone is insufficient evidence. Strong
+            # vectors still recall paraphrases with no literal overlap; a failed
+            # reranker cannot relax this admission threshold.
+            vector_score = semantic.get(chunk.chunk_id, 0)
+            if not (lexical_match or (chunk.chunk_id in semantic and
+                                     (bool(shared) and vector_score >= .55 or vector_score >= .70))):
+                continue
+            score = (exact + len(shared) +
+                     sum(2*idf.get(t,0) for t in tokens & patterns) +
+                     sum(4*idf[t]*(3 if t in title_terms else 1) for t in shared))
+            if lexical_match:
+                lexical_scores[chunk.chunk_id] = score
+            ranked.append((score+vector_score*4, chunk))
         ranked.sort(key=lambda pair:(-pair[0],pair[1].document_id,pair[1].offset_start))
         if local_vector and self.fusion=='rrf':
             lexical_order=sorted(lexical_scores,key=lambda key:(-lexical_scores[key],key))
@@ -495,10 +524,10 @@ class KnowledgeService:
                 # These scores are not calibrated probabilities. In the low-score
                 # region retain the original fusion order rather than amplify noise.
                 reorder=max(values,default=0)>=0.20
-                ranked=[(value if reorder else fused,c) for value,(fused,c) in zip(values,pool) if value>=0.03]
+                ranked=[(value if reorder else fused,c) for value,(fused,c) in zip(values,pool) if value>=0.02]
                 if reorder:ranked.sort(key=lambda p:(-p[0],p[1].document_id,p[1].offset_start))
                 self._retrieval.set({**self.retrieval_evidence,'rerank':{**self.retrieval_evidence['rerank'],
-                    'ordering':'cross_encoder' if reorder else 'fusion_low_score','minimum_score':0.03}})
+                    'ordering':'cross_encoder' if reorder else 'fusion_low_score','minimum_score':0.02}})
         return tuple(c for _,c in ranked[:top_k])
 
     def answer(self, query, actor_id, *, model_client=None,read_scope=None,access_check=None):
@@ -526,7 +555,7 @@ class KnowledgeService:
             return result
         # Topic similarity is not evidence of an absent financial fact. Static
         # product snapshots cannot supply live rates, prices or unlisted terms.
-        requested=set(re.findall(r'存款保险|保险|赔付|贷款|企业账户|信用卡|年费|手续费|营业|净值|利率',query))
+        requested=set(re.findall(r'存款保险|保险|赔付|贷款|企业账户|信用卡|年费|手续费|营业|净值|利率|跨境汇款|证件',query))
         evidence_text='\n'.join(c.title+' '+c.text for c in hits)
         live_fact=bool(re.search(r'(?:今天|实时|当前|现在).{0,16}(?:利率|价格|报价|净值)|(?:利率|价格|报价|净值).{0,12}(?:今天|实时|当前|现在)',query))
         if live_fact or any(term not in evidence_text for term in requested):

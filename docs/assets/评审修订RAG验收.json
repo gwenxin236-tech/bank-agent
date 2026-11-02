@@ -1,0 +1,66 @@
+{
+  "schema": 1,
+  "date": "2026-11-02",
+  "status": "PASS_LOCAL_STRICT_THREE_MODES_120",
+  "scoring": "answerable requires ANSWERED, nonempty answer, expected top source and exact retrieved chunk citations; negatives retain original refusal rules",
+  "positive_cases": 88,
+  "negative_cases": 32,
+  "dataset_version": "p03-v4-source-review-20261102-frozen",
+  "dataset_sha256": "9b5bd2e54ec3397e6bb1e9c78f38d6a2297b80f414c5631bf27ccdf336b473e2",
+  "source_sha256": "2a78203194b1d69a4d6ecd13b7b812d5f1c3c2191d01005c5b06ec9af87dd5a0",
+  "human_status": "PENDING",
+  "independent_holdout": false,
+  "summaries": {
+    "lexical": {
+      "count": 120,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "negative_refusal_rate": 1.0,
+      "correct": 120,
+      "failures": []
+    },
+    "hybrid": {
+      "count": 120,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "negative_refusal_rate": 1.0,
+      "correct": 120,
+      "failures": []
+    },
+    "reranked": {
+      "count": 120,
+      "hit_at_1": 1.0,
+      "hit_at_3": 1.0,
+      "mrr_at_3": 1.0,
+      "ndcg_at_3": 1.0,
+      "negative_refusal_rate": 1.0,
+      "correct": 120,
+      "failures": []
+    }
+  },
+  "cloud_calls": 0,
+  "record": "data/verification/rag-allmodes-20261102/v4-final.json",
+  "previous_counts": {
+    "lexical": 113,
+    "hybrid": 116,
+    "reranked": 120
+  },
+  "frozen_cases_unchanged": 120,
+  "v3_frozen_corpus_same_results": true,
+  "network_connections_prohibited": true,
+  "source_refresh": "Two official BOC pages rechecked 2026-11-02; source text unchanged, expiry renewed to 2026-11-12; v3 corpus archived",
+  "quality_scope": "development-exposed synthetic regression, not unseen or real-user accuracy",
+  "implementation_sha256": "a74893413f46896062d4da9ea377a3b339784975a3d689c66a494d378cbf9801",
+  "reranker_minimum_score": 0.02,
+  "reranker_ordering_threshold": 0.2,
+  "cases_sha256": "eb0a79804afdb2475b02d6895d725588f1a5e9504f9edd8d3074c3e393b11364",
+  "additional_main_chain_questions": 8,
+  "scoring_unchanged": true,
+  "container_all_three_modes": 120,
+  "container_record": "data/verification/t14-20261102-123537-021185/report.json",
+  "additional_main_chain_all_pass": true
+}
